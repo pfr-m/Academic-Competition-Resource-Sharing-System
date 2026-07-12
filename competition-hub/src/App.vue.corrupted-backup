@@ -1,0 +1,2771 @@
+﻿锘?template>
+  <section v-if="!isLoggedIn" class="login-screen">
+    <div class="login-panel">
+      <div class="brand-mark login-mark">
+        <el-icon><Trophy /></el-icon>
+      </div>
+      <h1>瀛︾绔炶禌闅愮缁勯槦绯荤粺</h1>
+      <el-tabs v-model="authTab" class="auth-tabs">
+        <el-tab-pane label="璐﹀彿鐧诲綍" name="password">
+          <el-form label-position="top" @submit.prevent>
+            <el-form-item label="璐﹀彿">
+              <el-input v-model="loginForm.username" placeholder="璇疯緭鍏ュ鍙?宸ュ彿" />
+            </el-form-item>
+            <el-form-item label="瀵嗙爜">
+              <el-input v-model="loginForm.password" type="password" show-password placeholder="璇疯緭鍏ョ櫥褰曞瘑鐮? @keyup.enter="loginAndLoad" />
+              <div class="form-tip">瀵嗙爜涓?-18 娴ｅ秴鐡уВ宥勭瑢閺佹澘鐡х紒鍕値閵?/div>
+            </el-form-item>
+            <el-button type="primary" :loading="loading" @click="loginAndLoad">鐧诲綍绯荤粺</el-button>
+            <div class="auth-links">
+              <el-button text type="primary" @click="resetPasswordVisible = true">蹇樿瀵嗙爜锛?/el-button>
+            </div>
+          </el-form>
+        </el-tab-pane>
+        <el-tab-pane label="閭娉ㄥ唽" name="register">
+          <el-form label-position="top" @submit.prevent>
+            <el-form-item label="瀛﹀彿 / 鐧诲綍璐﹀彿">
+              <el-input v-model="registerForm.studentNo" />
+            </el-form-item>
+            <el-form-item label="鏄电О">
+              <el-input v-model="registerForm.nickname" />
+            </el-form-item>
+            <el-form-item label="鎵嬫満鍙?
+              <el-input v-model="registerForm.phone" />
+            </el-form-item>
+            <el-form-item label="閭">
+              <el-input v-model="registerForm.email">
+                <template #append>
+                  <el-button :loading="codeSending" @click="sendEmailCode">鍙戦€侀獙璇佺爜</el-button>
+                </template>
+              </el-input>
+            </el-form-item>
+            <el-form-item label="閭楠岃瘉鐮?
+              <el-input v-model="registerForm.code" />
+              <div class="form-tip code-tip">楠岃瘉鐮佸凡鍙戦€佽嚦鎮ㄧ殑閭锛屾湁鏁堟椂闂翠负 5 鍒嗛挓锛岃鍕挎硠闇层€?div>
+            </el-form-item>
+            <el-form-item label="瀵嗙爜">
+              <el-input v-model="registerForm.password" type="password" show-password @keyup.enter="registerByEmail" />
+            </el-form-item>
+            <el-button type="primary" :loading="loading" @click="registerByEmail">娉ㄥ唽骞剁櫥褰?          </el-form>
+        </el-tab-pane>
+      </el-tabs>
+    </div>
+    <el-dialog v-model="firstLoginDialogVisible" title="娆㈣繋锛岃秴绾х鐞嗗憳" width="520px" :close-on-click-modal="false" :close-on-press-escape="false">
+      <el-alert title="鎮ㄦ槸骞冲彴鐨勮秴绾х鐞嗗憳" type="warning" :closable="false" show-icon />
+      <p>鎮ㄦ嫢鏈変互涓嬮澶栨潈闄愶細</p>
+      <ul style="line-height: 2;">
+        <li><strong>璁剧疆绠＄悊鍛?/strong> 鈥?灏嗕换鎰忕敤鎴锋彁鍗囦负骞冲彴绠＄悊鍛?/li>
+        <li><strong>鍙栨秷绠＄悊鍛?/strong> 鈥?绉婚櫎浠绘剰绠＄悊鍛樿韩浠?/li>
+        <li><strong>杞瓒呯骇绠＄悊鍛?/strong> 鈥?灏嗚秴绾х鐞嗗憳鏉冮檺杞缁欏叾浠栫敤鎴凤紝杞鍚庢偍鍙樹负鏅€氱鐞嗗憳</li>
+      </ul>
+      <p>棣栨鐧诲綍鎻愮ず鍏抽棴鍚庡彲鍦ㄥ悗鍙板啀娆℃煡鐪嬨€?/p>
+      <template #footer>
+        <el-button type="primary" @click="acknowledgeFirstLogin">鎴戠煡閬撲簡</el-button>
+      </template>
+    </el-dialog>
+    <el-dialog v-model="resetPasswordVisible" title="鎵惧洖瀵嗙爜" width="460px">
+      <el-form label-position="top" @submit.prevent>
+        <el-form-item label="娉ㄥ唽閭">
+          <el-input v-model="resetPasswordForm.email" placeholder="鐠囩柉绶崗銉︽暈閸愬本妞傜紒鎴濈暰閻ㄥ嫰鍋栫粻?>
+            <template #append>
+              <el-button :loading="resetCodeSending" @click="sendResetPasswordCode">鑾峰彇楠岃瘉鐮?            </template>
+          </el-input>
+        </el-form-item>
+        <el-form-item label="閭楠岃瘉鐮?
+          <el-input v-model="resetPasswordForm.code" maxlength="6" placeholder="鐠囩柉绶崗?6 娴ｅ秹鐛欑拠浣虹垳" />
+          <div class="form-tip code-tip">楠岃瘉鐮佸凡鍙戦€佽嚦鎮ㄧ殑閭锛屾湁鏁堟椂闂翠负 5 鍒嗛挓锛岃鍕挎硠闇层€?div>
+        </el-form-item>
+        <el-form-item label="鏂板瘑鐮?
+          <el-input v-model="resetPasswordForm.newPassword" type="password" show-password placeholder="6-18 娴ｅ秴鐡уВ宥勭瑢閺佹澘鐡х紒鍕値" @keyup.enter="resetPassword" />
+          <div class="form-tip">瀵嗙爜涓?-18 娴ｅ秴鐡уВ宥勭瑢閺佹澘鐡х紒鍕値閵?/div>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="resetPasswordVisible = false">鍙栨秷</el-button>
+        <el-button type="primary" :loading="resettingPassword" @click="resetPassword">绾喛顓绘穱顔芥暭</el-button>
+      </template>
+    </el-dialog>
+  </section>
+
+  <el-container v-else class="app-shell">
+    <el-aside width="248px" class="sidebar">
+      <div class="brand">
+        <div class="brand-mark">
+          <el-icon><Trophy /></el-icon>
+        </div>
+        <div>
+          <strong>绔炶禌闅愮缁勯槦绯荤粺</strong>
+          <span>璧勬簮 路 缁忛獙 路 娌欓緳 路 绾㈠</span>
+        </div>
+      </div>
+
+      <el-menu :default-active="activeView" class="nav-menu" @select="navigateTo">
+        <el-menu-item index="dashboard">
+          <el-icon><DataBoard /></el-icon>
+          <span>绯荤粺閹槒顫?/span>
+        </el-menu-item>
+        <el-menu-item index="resources">
+          <el-icon><FolderOpened /></el-icon>
+          <span>绔炶禌璧勬簮搴?/span>
+        </el-menu-item>
+        <el-menu-item index="blog">
+          <el-icon><EditPen /></el-icon>
+          <span>缁忛獙鍗氬</span>
+        </el-menu-item>
+        <el-menu-item index="salon">
+          <el-icon><Calendar /></el-icon>
+          <span>娌欓緳棰勭害</span>
+        </el-menu-item>
+        <el-menu-item index="teams">
+          <el-icon><Connection /></el-icon>
+          <span>鎶€鏈孩濞樼粍闃?/span>
+        </el-menu-item>
+        <el-menu-item index="profile">
+          <el-icon><Lock /></el-icon>
+          <span>涓汉闅愮涓績</span>
+        </el-menu-item>
+        <el-menu-item v-if="currentUser.role !== 'student'" index="admin">
+          <el-icon><Setting /></el-icon>
+          <span>瀹℃牳涓庣鐞嗗悗鍙?/span>
+        </el-menu-item>
+      </el-menu>
+    </el-aside>
+
+    <el-container>
+      <el-header class="topbar">
+        <div>
+          <el-breadcrumb separator="/">
+            <el-breadcrumb-item>瀛︾绔炶禌鏈嶅姟骞冲彴</el-breadcrumb-item>
+            <el-breadcrumb-item>{{ viewTitle }}</el-breadcrumb-item>
+          </el-breadcrumb>
+          <div class="title-row">
+            <el-button class="back-button" :icon="ArrowLeft" text @click="goBack">杩斿洖涓婁竴椤?/el-button>
+            <h1>{{ viewTitle }}</h1>
+          </div>
+        </div>
+        <el-dropdown trigger="click" @command="handleUserCommand">
+          <div class="user-chip">
+            <el-avatar :size="42">{{ currentUser.avatar }}</el-avatar>
+            <div>
+              <strong>{{ currentUser.name }}</strong>
+              <span>{{ currentUser.roleLabel }}</span>
+            </div>
+          </div>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item command="profile">涓汉闅愮涓績</el-dropdown-item>
+              <el-dropdown-item divided command="logout">
+                <el-icon><SwitchButton /></el-icon>
+                閫€鍑虹櫥褰?             </el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
+      </el-header>
+
+      <el-main>
+        <section v-if="activeView === 'dashboard'" class="view">
+          <div class="hero-band">
+            <div class="hero-copy">
+              <el-tag effect="dark" type="success">RBAC + 闅愮浼樺厛</el-tag>
+              <h2>閹跺﹦鐝电挧娑滅カ濠ф劑鈧胶绮℃灞藉瀻娴滎偁鈧胶鍤庢稉瀣煓姒瑥鎷伴殣绉佺粍闃熼弨鎹愮箻閸氬奔绔存稉顏嗛兇缂佺喆鈧?</h2>
+              <p>
+                鏅€氭艾顒熼悽鐔峰讲娴犮儲澹樿祫鏂欓妴浣稿晸鍗氬閵嗕胶绮嶉梼鐕傜幢閻楀綊鍊嬪闀垮濮愰崣顖欎簰鍙戝竷鐎规ɑ鏌熺粡楠岄崪灞剧煓姒瑱绱辩鐞嗛崨妯跨鐠愶絽鍞寸€圭懓顓搁弽鎼炩偓浣规綀闂勬劗顓搁悶鍡楁嫲浜哄伐鎾悎閵?              </p>
+              <div class="hero-actions">
+                <el-button type="primary" :icon="Download" @click="navigateTo('resources')">杩涘叆璧勬簮搴?/el-button>
+                <el-button :icon="ChatLineRound" @click="navigateTo('teams')">鍙戝竷缁勯槦闇€姹?/el-button>
+              </div>
+            </div>
+            <div class="hero-metrics">
+              <div v-for="metric in metrics" :key="metric.label" class="metric">
+                <strong>{{ metric.value }}</strong>
+                <span>{{ metric.label }}</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="section-grid">
+            <article v-for="item in modules" :key="item.title" class="module-card clickable" @click="navigateTo(item.target)">
+              <el-icon :class="item.color"><component :is="item.icon" /></el-icon>
+              <h3>{{ item.title }}</h3>
+              <p>{{ item.desc }}</p>
+              <el-tag size="small">{{ item.badge }}</el-tag>
+            </article>
+          </div>
+
+          <div class="two-column">
+            <section class="panel">
+              <div class="panel-head">
+                <h3>杩戞湡娲诲姩鏃ョ▼</h3>
+                <el-button text type="primary" @click="navigateTo('salon')">鏌ョ湅鍏ㄩ儴</el-button>
+              </div>
+              <el-timeline>
+                <el-timeline-item
+                  v-for="event in salons"
+                  :key="event.id"
+                  :timestamp="`${event.date} 璺?${event.place}`"
+                  placement="top"
+                >
+                  <strong>{{ event.title }}</strong>
+                  <p>{{ event.speaker }} 璺?閸撯晙缍?{{ event.capacity - event.booked }} / {{ event.capacity }} 閸氬秹顤?/p>
+                </el-timeline-item>
+              </el-timeline>
+            </section>
+            <section class="advantage-panel">
+              <div class="advantage-copy">
+                <el-tag type="success">绯荤粺鏍稿績浼樺娍</el-tag>
+                <h3>娴犲氦绁┃鎰梾缁便垹鍩岄殣绉佺粍闃熼敍灞肩閺夛繝鎽肩捄顖涙箛閸旓紕鐝电挧娑欏灇闂€瑁も偓?/h3>
+                <p>閸ュ绮惇鐔风杽绔炶禌閸︾儤娅欑拋鎹愵吀閿涘本濡歌祫鏂欏▽澶嬬┅閵嗕胶绮℃灞肩炊閹绢厹鈧胶鍤庢稉瀣た閸斻劌鎷伴槦浼嶉崠褰掑帳缂佺喍绔撮崚棰佺娑擃亜褰叉穱鈥抽挬閸欒埇鈧?/p>
+              </div>
+              <div class="advantage-grid">
+                <div v-for="item in advantages" :key="item.title" class="advantage-item">
+                  <el-icon><component :is="item.icon" /></el-icon>
+                  <strong>{{ item.title }}</strong>
+                  <span>{{ item.desc }}</span>
+                </div>
+              </div>
+            </section>
+          </div>
+        </section>
+
+        <section v-if="activeView === 'resources'" class="view">
+          <div class="toolbar">
+            <el-input v-model="resourceKeyword" placeholder="鎼滅储閽冩繃藟閺夘垬鈧礁銇夊顖濈閵嗕焦鏆熺€涳箑缂撳Ο?.." clearable>
+              <template #prefix><el-icon><Search /></el-icon></template>
+            </el-input>
+            <el-select v-model="resourceContest" placeholder="绔炶禌鍚嶇О" clearable>
+              <el-option v-for="name in contests" :key="name" :label="name" :value="name" />
+            </el-select>
+            <el-select v-model="resourceType" placeholder="璧勬枡绫诲瀷" clearable>
+              <el-option v-for="type in resourceTypes" :key="type" :label="type" :value="type" />
+            </el-select>
+            <el-button type="primary" :icon="Upload" :disabled="currentUser.role === 'student'" @click="createDemoResource">涓婁紶璧勬簮</el-button>
+            <el-button
+              v-if="selectedRole === 'admin'"
+              type="danger"
+              plain
+              :disabled="selectedResourceIds.length === 0"
+              @click="deleteSelectedResources"
+            >
+              閹靛綊鍣哄垹闄?            </el-button>
+          </div>
+
+          <section class="hot-ranking" v-if="hotResources.length > 0">
+            <div class="panel-head">
+              <h3>鐑棬璧勬枡鎺ㄨ崘濮?/h3>
+              <el-tag type="danger">Redis ZSet Top 5</el-tag>
+            </div>
+            <div class="hot-list">
+              <button v-for="(item, index) in hotResources" :key="item.id" class="hot-item" @click="resourceKeyword = item.title">
+                <strong>{{ index + 1 }}</strong>
+                <span>{{ item.title }}</span>
+                <em>{{ item.downloads }} 濞?/em>
+              </button>
+            </div>
+          </section>
+
+          <div class="resource-grid">
+            <article v-for="resource in filteredResources" :key="resource.id" class="resource-card">
+              <el-checkbox
+                v-if="selectedRole === 'admin'"
+                v-model="selectedResourceIds"
+                class="card-checkbox"
+                :label="resource.id"
+              />
+              <div class="card-topline">
+                <el-tag>{{ resource.contest }}</el-tag>
+                <el-tag type="info">{{ resource.type }}</el-tag>
+              </div>
+              <h3>{{ resource.title }}</h3>
+              <p>{{ resource.summary }}</p>
+              <div class="meta-row">
+                <span><el-icon><View /></el-icon>{{ resource.downloads }} 濞嗏€茬瑓鏉?/span>
+                <span><el-icon><User /></el-icon>{{ resource.uploader }}</span>
+              </div>
+              <div class="card-actions">
+                <el-button type="primary" plain :icon="Download" @click="downloadResource(resource)">瀹夊叏涓嬭浇</el-button>
+                <template v-if="canManageResource(resource)">
+                  <el-button plain :icon="EditPen" @click="openResourceEditor(resource)">缂栬緫璧勬簮</el-button>
+                  <el-button type="danger" plain @click="deleteResource(resource)">鍒犻櫎璧勬簮</el-button>
+                </template>
+              </div>
+            </article>
+          </div>
+          <el-pagination
+            class="pager"
+            background
+            layout="prev, pager, next, sizes, total"
+            :current-page="resourcePage.current"
+            :page-size="resourcePage.size"
+            :page-sizes="[4, 8, 12, 20]"
+            :total="resourcePage.total"
+            @current-change="changeResourcePage"
+            @size-change="changeResourceSize"
+          />
+
+          <el-dialog v-model="resourceEditorVisible" title="缂栬緫璧勬簮" width="520px">
+            <el-form label-position="top">
+              <el-form-item label="璧勬枡鍚嶇О">
+                <el-input v-model="resourceEditor.title" />
+              </el-form-item>
+              <el-form-item label="绔炶禌鍚嶇О">
+                <el-input v-model="resourceEditor.contest" />
+              </el-form-item>
+              <el-form-item label="璧勬枡绫诲瀷">
+                <el-input v-model="resourceEditor.type" />
+              </el-form-item>
+              <el-form-item label="璧勬枡绠€浠?
+                <el-input v-model="resourceEditor.summary" type="textarea" :rows="4" />
+              </el-form-item>
+            </el-form>
+            <template #footer>
+              <el-button @click="resourceEditorVisible = false">鍙栨秷</el-button>
+              <el-button type="primary" @click="saveResourceEdit">娣囨繂鐡?/el-button>
+            </template>
+          </el-dialog>
+        </section>
+
+        <section v-if="activeView === 'blog'" class="view">
+          <div class="creator-stats">
+            <div class="creator-card">
+              <span>娴ｆ粌鎼ч幀鏄忓箯鐠?/span>
+              <strong>{{ creatorStats.totalLikes }}</strong>
+            </div>
+            <div class="creator-card">
+              <span>娴ｆ粌鎼ч幀缁樻暪閽?/span>
+              <strong>{{ creatorStats.totalCollects }}</strong>
+            </div>
+            <div class="creator-card">
+              <span>鍏虫敞缁绗?/span>
+              <strong>{{ creatorStats.followers }}</strong>
+            </div>
+            <div class="creator-card">
+              <span>鍙戝竷娴ｆ粌鎼?/span>
+              <strong>{{ creatorStats.works }}</strong>
+            </div>
+          </div>
+          <div class="toolbar">
+            <el-input v-model="blogKeyword" :prefix-icon="Search" placeholder="鎼滅储鏍囬閵嗕焦顒滈弬鍥ㄥ灗娴ｆ粏鈧? clearable />
+            <el-select v-model="blogContest" placeholder="绔炶禌閺嶅洨顒? clearable>
+              <el-option v-for="contest in contests" :key="contest" :label="contest" :value="contest" />
+              <el-option label="缁忛獙閸掑棔闊? value="缁忛獙閸掑棔闊? />
+            </el-select>
+            <el-select v-model="blogVisibility" placeholder="鍙閹? clearable>
+              <el-option label="鍏紑楠炲灝婧€" value="PUBLIC" />
+              <el-option label="娴犲懓鍤滃鍗炲讲鐟? value="PRIVATE" />
+            </el-select>
+            <el-button type="primary" :icon="EditPen" @click="openBlogEditor()">鍙戝竷鍗氬</el-button>
+          </div>
+
+          <div class="blog-list">
+            <article v-for="post in blogs" :key="post.id" class="blog-card">
+              <div class="blog-head">
+                <div>
+                  <h3>{{ post.title }}</h3>
+                  <div class="author-line">
+                    <span>{{ post.anonymous ? post.alias : post.author }}</span>
+                    <el-tag type="success" size="small">{{ post.contestTag }}</el-tag>
+                    <el-tag v-if="post.cert" type="warning" size="small">{{ post.cert }}</el-tag>
+                    <el-tag v-if="post.visibility === 'private'" type="info" size="small">涓汉缁楁棁顔?/el-tag>
+                  </div>
+                </div>
+                <div class="card-actions">
+                  <el-button @click="openBlogDetail(post)">閺屻儳婀呯拠锔藉剰</el-button>
+                  <el-button v-if="canEditBlog(post)" type="primary" plain @click="openBlogEditor(post)">缂栬緫</el-button>
+                  <el-button v-if="canEditBlog(post)" type="danger" plain @click="deleteBlog(post)">鍒犻櫎</el-button>
+                </div>
+              </div>
+              <div class="markdown-preview compact" v-html="renderMarkdown(post.content)"></div>
+            </article>
+          </div>
+          <el-pagination
+            class="pager"
+            layout="total, sizes, prev, pager, next"
+            :page-sizes="[4, 6, 8, 12]"
+            :current-page="blogPage.current"
+            :page-size="blogPage.size"
+            :total="blogPage.total"
+            @current-change="changeBlogPage"
+            @size-change="changeBlogSize"
+          />
+        </section>
+
+        <section v-if="activeView === 'blogEditor'" class="view">
+          <div class="toolbar">
+            <el-radio-group v-model="blogEditorMode">
+              <el-radio-button label="markdown">Markdown</el-radio-button>
+              <el-radio-button label="text">鏅€氭碍鏋冮張?/el-radio-button>
+            </el-radio-group>
+            <el-button @click="goBack">鍙栨秷</el-button>
+            <el-button type="primary" :icon="EditPen" @click="publishBlog">{{ editingBlogId ? '娣囨繂鐡ㄦ穱顔芥暭' : '鍙戝竷鍗氬' }}</el-button>
+          </div>
+          <div class="split-layout blog-editor-layout">
+            <section class="panel editor-panel">
+              <div class="panel-head">
+                <h3>{{ editingBlogId ? '缂栬緫缁忛獙' : '鍙戝竷缁忛獙 / 涓汉缁楁棁顔? }}</h3>
+                <el-tag type="success">{{ blogEditorMode === 'markdown' ? 'Markdown' : '鏅€氭碍鏋冮張? }}</el-tag>
+              </div>
+              <el-form label-position="top">
+                <el-form-item label="鏍囬">
+                  <el-input v-model="draftBlog.title" />
+                </el-form-item>
+                <el-form-item label="绔炶禌閺嶅洨顒?>
+                  <el-select v-model="draftBlog.contestTag" filterable allow-create default-first-option>
+                    <el-option v-for="contest in contests" :key="contest" :label="contest" :value="contest" />
+                    <el-option label="缁忛獙閸掑棔闊? value="缁忛獙閸掑棔闊? />
+                  </el-select>
+                </el-form-item>
+                <el-form-item label="濮濓絾鏋?>
+                  <el-input v-model="draftBlog.content" type="textarea" :rows="20" />
+                </el-form-item>
+                <el-form-item v-if="blogEditorMode === 'markdown'" label="鍗氬閹绘帒娴?>
+                  <el-input v-model="draftBlog.imageUrl" placeholder="鏉堟挸鍙嗛崶鍓у URL閿涘本鍨ㄩ悙鐟板毊閸欏厖鏅堕幓鎺戝弳缁€杞扮伐閸?>
+                    <template #append>
+                      <el-button @click="insertBlogImage">閹绘帒鍙嗛崶鍓у</el-button>
+                    </template>
+                  </el-input>
+                </el-form-item>
+                <div class="form-inline">
+                  <el-radio-group v-model="draftBlog.visibility">
+                    <el-radio-button label="public">鍏紑楠炲灝婧€</el-radio-button>
+                    <el-radio-button label="private">娴犲懓鍤滃鍗炲讲鐟?/el-radio-button>
+                  </el-radio-group>
+                  <el-checkbox v-model="draftBlog.anonymous">娴ｈ法鏁ゆ樀绉?閸栧灝鎮?/el-checkbox>
+                  <el-checkbox v-model="draftBlog.commentsOpen">瀵偓閸氼垵鐦庣拋?/el-checkbox>
+                </div>
+              </el-form>
+            </section>
+
+            <section class="panel">
+              <div class="panel-head">
+                <h3>鐎圭偞妞傛０鍕潔</h3>
+                <span>{{ blogEditorMode === 'markdown' ? '鍙戝竷閸撳秴宓嗛弮鑸殿梾閺屻儲鐗稿? : '鏅€氭碍鏋冮張顒冨殰閸斻劍宕茬悰灞界潔缁€? }}</span>
+              </div>
+              <div class="markdown-preview editor-preview" v-html="renderedDraft"></div>
+            </section>
+          </div>
+        </section>
+
+        <section v-if="activeView === 'blogDetail'" class="view">
+          <article v-if="activeBlog" class="panel blog-detail">
+            <div class="blog-head">
+              <div>
+                <h2>{{ activeBlog.title }}<</h2>
+                <div class="author-line">
+                  <span>{{ activeBlog.anonymous ? activeBlog.alias : activeBlog.author }}</span>
+                  <el-tag type="success" size="small">{{ activeBlog.contestTag }}</el-tag>
+                  <el-tag v-if="activeBlog.visibility === 'private'" type="info" size="small">涓汉缁楁棁顔?/el-tag>
+                </div>
+              </div>
+              <div class="card-actions">
+                <el-button v-if="canEditBlog(activeBlog)" type="primary" plain @click="openBlogEditor(activeBlog)">缂栬緫</el-button>
+                <el-button v-if="canEditBlog(activeBlog)" type="danger" plain @click="deleteBlog(activeBlog)">鍒犻櫎</el-button>
+              </div>
+            </div>
+            <div class="social-actions">
+              <el-button
+                class="social-button like"
+                :class="{ active: activeBlog.social.liked }"
+                :loading="socialPending.like"
+                @click="toggleBlogAction('LIKE')"
+              >
+                鐐硅禐 {{ activeBlog.social.likes }}
+              </el-button>
+              <el-button
+                class="social-button collect"
+                :class="{ active: activeBlog.social.collected }"
+                :loading="socialPending.collect"
+                @click="toggleBlogAction('COLLECT')"
+              >
+                鏀惰棌 {{ activeBlog.social.collects }}
+              </el-button>
+              <el-button
+                class="social-button follow"
+                :class="{ active: activeBlog.social.followed }"
+                :disabled="activeBlog.authorId === currentUser.id"
+                :loading="socialPending.follow"
+                @click="toggleFollowAuthor"
+              >
+                {{ activeBlog.social.followed ? '瀹告彃鍙у▔銊ょ稊閼? : '鍏虫敞娴ｆ粏鈧? }}
+              </el-button>
+            </div>
+            <div class="markdown-preview detail-preview" v-html="renderMarkdown(activeBlog.content)"></div>
+          </article>
+          <section v-if="activeBlog" class="panel">
+            <div class="panel-head">
+              <h3>鐠囧嫯顔戦崠?/h3>
+              <el-tag>{{ activeBlog.comments.length }} 閺?/el-tag>
+            </div>
+            <div v-if="activeBlog.commentsOpen" class="comment-box">
+              <div v-for="comment in activeBlog.comments" :key="comment.id" class="comment">
+                <strong>{{ comment.author }}</strong>
+                <span>{{ comment.text }}</span>
+                <div v-for="reply in comment.replies" :key="reply.id" class="reply">
+                  <strong>{{ reply.author }}</strong>
+                  <span>{{ reply.text }}</span>
+                </div>
+              </div>
+              <el-input v-model="commentDrafts[activeBlog.id]" placeholder="閸愭瑤绔撮弶陇鐦庣拋?>
+                <template #append>
+                  <el-button @click="addComment(activeBlog)">鐠囧嫯顔?/el-button>
+                </template>
+              </el-input>
+            </div>
+            <el-alert v-else title="娴ｆ粏鈧懎鍑￠崗鎶芥４鐠囧嫯顔戦崠? type="info" :closable="false" />
+          </section>
+        </section>
+
+        <section v-if="activeView === 'salon'" class="view">
+          <div class="toolbar">
+            <el-alert
+              title="娌欓緳娴犲懐顓搁悶鍡楁喅閸滃瞼澹掗柇鈧闀垮濮愰崣顖氬絺鐢喛绱卞鐢熼绾﹂幋鎰閸氬簼绱伴崷銊ら嚋娴滆桨鑵戣箛鍐晸閹存劕鍤熺拠浣碘偓?
+              type="success"
+              :closable="false"
+            />
+            <el-button type="primary" :icon="Plus" :disabled="currentUser.role === 'student'" @click="createDemoSalon">鍙戝竷娌欓緳</el-button>
+          </div>
+
+          <div class="salon-grid">
+            <article v-for="salon in salons" :key="salon.id" class="salon-card">
+              <div class="date-box">
+                <strong>{{ salon.day }}</strong>
+                <span>{{ salon.month }}</span>
+              </div>
+              <div class="salon-main">
+                <h3>{{ salon.title }}</h3>
+                <p>{{ salon.description }}</p>
+                <div class="meta-row">
+                  <span class="time-highlight"><el-icon><Calendar /></el-icon>{{ salon.date }}</span>
+                  <span><el-icon><Location /></el-icon>{{ salon.place }}</span>
+                  <span><el-icon><UserFilled /></el-icon>{{ salon.speaker }}</span>
+                </div>
+                <el-progress :percentage="salonPercent(salon)" :stroke-width="10" />
+                <div class="card-actions">
+                  <span>閸撯晙缍?{{ salon.capacity - salon.booked }} / {{ salon.capacity }} 閸氬秹顤?/span>
+                  <el-button type="primary" :disabled="salon.booked >= salon.capacity || bookedSalonIds.includes(salon.id)" @click="bookSalon(salon)">
+                    {{ bookedSalonIds.includes(salon.id) ? '瀹告煡顣╃痪? : '閸︺劎鍤庨绾? }}
+                  </el-button>
+                </div>
+              </div>
+            </article>
+          </div>
+          <el-pagination
+            class="pager"
+            background
+            layout="prev, pager, next, sizes, total"
+            :current-page="salonPage.current"
+            :page-size="salonPage.size"
+            :page-sizes="[3, 6, 9, 12]"
+            :total="salonPage.total"
+            @current-change="changeSalonPage"
+            @size-change="changeSalonSize"
+          />
+        </section>
+
+        <section v-if="activeView === 'teams'" class="view">
+          <el-tabs v-model="teamTab" class="team-tabs">
+            <el-tab-pane label="缁勯槦婢堆冨泛" name="hall">
+              <div class="split-layout">
+                <section class="panel">
+                  <div class="panel-head">
+                    <h3>鍙戝竷缁勯槦闇€姹?h3>
+                    <el-tag type="danger">姒涙顓婚殣钘忛懕鏃傞兇閺傜懓绱?/el-tag>
+                  </div>
+                  <el-form label-position="top">
+                    <el-form-item label="闃熶紞閺傜懓鎮?>
+                      <el-input v-model="draftTeam.title" />
+                    </el-form-item>
+                    <el-form-item label="闂団偓濮瑰倹寮挎潻?>
+                      <el-input v-model="draftTeam.need" type="textarea" :rows="4" />
+                    </el-form-item>
+                    <el-form-item label="閹垛偓閼宠姤鐖ｇ粵?>
+                      <el-select v-model="draftTeam.skills" multiple placeholder="闁瀚ㄩ幎鈧張顖涚垽閻㈣鍎?>
+                        <el-option v-for="skill in allSkills" :key="skill" :label="skill" :value="skill" />
+                      </el-select>
+                    </el-form-item>
+                    <el-button type="primary" :icon="Plus" @click="publishTeam">鍙戝竷缁勯槦閸楋紕澧?/el-button>
+                  </el-form>
+                </section>
+
+                <section class="panel">
+                  <div class="panel-head">
+                    <h3>閸欏苯鎮滅涵顔款吇濞翠胶鈻?/h3>
+                    <el-tag>鐢宠 閳?鍚屾剰 閳?鐟欙綁鏀?/el-tag>
+                  </div>
+                  <el-steps :active="teamStep" finish-status="success" align-center>
+                    <el-step title="鐢宠閸旂姴鍙? />
+                    <el-step title="闃熼暱瀹℃牳閻㈣鍎? />
+                    <el-step title="鐟欙綁鏀ｉ懕鏃傞兇閺傜懓绱? />
+                  </el-steps>
+                  <p class="flow-note">
+                    绯荤粺閹凤附鍩呴崳銊ョ安閸︺劌鎮楃粩顖涚墡妤?JWT 娑撳氦绁┃鎰秺鐏炵儑绱濋梼鍙夘剾闁俺绻冩穱顔芥暭 URL ID 鐡掑﹥娼堥弻銉ф箙娴犳牔姹夊顔讳繆閵嗕焦澧滈張鍝勫娇閹存牜婀＄€圭偛顫橀崥宥冣偓?                  </p>
+                </section>
+              </div>
+
+              <section class="toolbar">
+                <el-input v-model="teamKeyword" placeholder="鎼滅储闃熶紞閵嗕線娓跺Ч鍌樷偓浣虹彽鐠?.." clearable>
+                  <template #prefix><el-icon><Search /></el-icon></template>
+                </el-input>
+                <el-select v-model="teamContest" placeholder="绔炶禌鍒嗙被" clearable>
+                  <el-option v-for="name in contests" :key="name" :label="name" :value="name" />
+                  <el-option label="閼奉亜鐣炬稊澶岀彽鐠? value="閼奉亜鐣炬稊澶岀彽鐠? />
+                </el-select>
+              </section>
+
+              <div class="team-grid">
+                <article v-for="team in teams" :key="team.id" class="team-card">
+                  <div class="card-topline">
+                    <el-tag type="success">{{ team.contest }}</el-tag>
+                    <el-tag type="info">{{ team.status }}</el-tag>
+                  </div>
+                  <h3>{{ team.title }}</h3>
+                  <p>{{ team.need }}</p>
+                  <div class="skill-row">
+                    <el-tag v-for="skill in team.skills" :key="skill" size="small">{{ skill }}</el-tag>
+                  </div>
+                  <div class="privacy-contact">
+                    <strong>閼辨梻閮撮弬鐟扮础</strong>
+                    <span>{{ team.unlocked ? team.contact : '閸欏苯鎮滅涵顔款吇閸撳秹娈ｉ挊? }}</span>
+                  </div>
+                  <div class="card-actions">
+                    <el-button :icon="Position" :disabled="currentUser.role === 'admin' || team.unlocked" @click="applyTeam(team)">鐢宠閸旂姴鍙?/el-button>
+                    <el-button type="primary" plain :disabled="!team.applied || team.unlocked || currentUser.role === 'student'" @click="approveTeam(team)">
+                      {{ currentUser.role === 'admin' ? '绠＄悊閸涙ê鎮撻幇? : '闃熼暱鍚屾剰' }}
+                    </el-button>
+                    <el-button size="small" type="primary" plain :disabled="!canManageTeam(team)" @click="openTeamEditor(team)">缂栬緫</el-button>
+                    <el-button size="small" type="danger" plain :disabled="!canManageTeam(team)" @click="deleteTeam(team)">鍒犻櫎</el-button>
+                  </div>
+                </article>
+              </div>
+              <el-pagination
+                class="pager"
+                background
+                layout="prev, pager, next, sizes, total"
+                :current-page="teamPage.current"
+                :page-size="teamPage.size"
+                :page-sizes="[3, 6, 9, 12]"
+                :total="teamPage.total"
+                @current-change="changeTeamPage"
+                @size-change="changeTeamSize"
+              />
+            </el-tab-pane>
+
+            <el-tab-pane label="閹存垹娈戦槦浼嶇敵璇风鐞? name="applications">
+              <section class="panel">
+                <div class="panel-head">
+                  <h3>閹存垹娈戦槦浼嶇敵璇?/h3>
+                  <div class="head-actions">
+                    <el-button type="primary" plain size="small" :disabled="selectedManageableApplicationIds.length === 0" @click="approveSelectedManageableApplications">閹靛綊鍣哄悓鎰忛崗銉╂Е</el-button>
+                    <el-button type="info" plain size="small" :disabled="selectedManageableApplicationIds.length === 0" @click="rejectSelectedManageableApplications">閹靛綊鍣烘嫆缁濈敵璇?/el-button>
+                    <el-button type="danger" plain size="small" :disabled="selectedManageableApplicationDeleteIds.length === 0" @click="deleteSelectedManageableApplications">閹靛綊鍣哄垹闄ょ拋鏉跨秿</el-button>
+                    <el-tag type="success">{{ teamApplicationPage.total }} 閺?/el-tag>
+                  </div>
+                </div>
+                <el-table :data="manageableTeamApplications" stripe @selection-change="selectManageableApplications">
+                  <el-table-column type="selection" width="55" />
+                  <el-table-column prop="teamTitle" label="闃熶紞" />
+                  <el-table-column prop="applicant" label="鐢宠娴? width="180" />
+                  <el-table-column prop="skillsText" label="閹垛偓閼崇晫鏁鹃崓? />
+                  <el-table-column prop="status" label="鐘舵€?width="110" />
+                  <el-table-column label="閹垮秳缍? width="210">
+                    <template #default="{ row }">
+                      <el-button size="small" type="primary" :disabled="row.rawStatus !== 'PENDING'" @click="approveTeamApplication(row)">鍚屾剰</el-button>
+                      <el-button size="small" type="info" plain :disabled="row.rawStatus !== 'PENDING'" @click="rejectTeamApplication(row)">鎷掔粷</el-button>
+                      <el-button size="small" type="danger" plain @click="deleteTeamApplication(row)">鍒犻櫎</el-button>
+                    </template>
+                  </el-table-column>
+                </el-table>
+                <el-pagination
+                  class="pager"
+                  background
+                  layout="prev, pager, next, sizes, total"
+                  :current-page="teamApplicationPage.current"
+                  :page-size="teamApplicationPage.size"
+                  :page-sizes="[5, 8, 12, 20]"
+                  :total="teamApplicationPage.total"
+                  @current-change="changeTeamApplicationPage"
+                  @size-change="changeTeamApplicationSize"
+                />
+              </section>
+            </el-tab-pane>
+
+            <el-tab-pane label="閹存垹娈戦槦浼嶉幋鎰喅绠＄悊" name="members">
+              <section class="panel">
+                <div class="panel-head">
+                  <h3>閹存垹娈戦槦浼嶉幋鎰喅</h3>
+                  <el-tag type="success">{{ teamMemberPage.total }} 娴?/el-tag>
+                </div>
+                <el-table :data="manageableTeamMembers" stripe>
+                  <el-table-column prop="teamTitle" label="闃熶紞" />
+                  <el-table-column prop="member" label="闂冪喎鎲? width="180" />
+                  <el-table-column prop="role" label="鐟欐帟澹? width="110" />
+                  <el-table-column prop="skillsText" label="閹垛偓閼宠姤鐖ｇ粵? />
+                  <el-table-column label="閹垮秳缍? width="150">
+                    <template #default="{ row }">
+                      <el-button size="small" type="danger" plain :disabled="row.role === '闃熼暱'" @click="removeTeamMember(row)">缁夎鍤槦浼?/el-button>
+                    </template>
+                  </el-table-column>
+                </el-table>
+                <el-pagination
+                  class="pager"
+                  background
+                  layout="prev, pager, next, sizes, total"
+                  :current-page="teamMemberPage.current"
+                  :page-size="teamMemberPage.size"
+                  :page-sizes="[5, 8, 12, 20]"
+                  :total="teamMemberPage.total"
+                  @current-change="changeTeamMemberPage"
+                  @size-change="changeTeamMemberSize"
+                />
+              </section>
+            </el-tab-pane>
+          </el-tabs>
+
+          <el-dialog v-model="teamEditorVisible" title="缂栬緫闃熶紞娲诲姩" width="560px">
+            <el-form label-position="top">
+              <el-form-item label="闃熶紞閺傜懓鎮?>
+                <el-input v-model="teamEditor.title" />
+              </el-form-item>
+              <el-form-item label="绔炶禌妞ゅ湱娲?>
+                <el-select v-model="teamEditor.contest">
+                  <el-option v-for="name in contests" :key="name" :label="name" :value="name" />
+                  <el-option label="閼奉亜鐣炬稊澶岀彽鐠? value="閼奉亜鐣炬稊澶岀彽鐠? />
+                </el-select>
+              </el-form-item>
+              <el-form-item label="闂団偓濮瑰倹寮挎潻?>
+                <el-input v-model="teamEditor.need" type="textarea" :rows="4" />
+              </el-form-item>
+              <el-form-item label="閹垛偓閼宠姤鐖ｇ粵?>
+                <el-select v-model="teamEditor.skills" multiple>
+                  <el-option v-for="skill in allSkills" :key="skill" :label="skill" :value="skill" />
+                </el-select>
+              </el-form-item>
+            </el-form>
+            <template #footer>
+              <el-button @click="teamEditorVisible = false">鍙栨秷</el-button>
+              <el-button type="primary" @click="saveTeamEdit">娣囨繂鐡?/el-button>
+            </template>
+          </el-dialog>
+
+        </section>
+
+        <section v-if="activeView === 'profile'" class="view">
+          <div class="profile-layout">
+            <section class="panel">
+              <div class="panel-head">
+                <h3>闅愮鍙搴?h3>
+                <div class="head-actions">
+                  <el-tag type="success">鏁版嵁鑷富鏉?el-tag>
+                  <el-button type="primary" plain @click="openPasswordDialog">娣囶喗鏁肩櫥褰曞瘑鐮?/el-button>
+                </div>
+              </div>
+              <el-form label-position="top">
+                <el-form-item label="閻喎鐤勬慨鎾虫倳">
+                  <el-segmented v-model="privacy.realName" :options="privacyOptions" />
+                </el-form-item>
+                <el-form-item label="瀵邦喕淇?>
+                  <el-segmented v-model="privacy.wechat" :options="privacyOptions" />
+                </el-form-item>
+                <el-form-item label="鎵嬫満鍙?
+                  <el-segmented v-model="privacy.phone" :options="privacyOptions" />
+                </el-form-item>
+              </el-form>
+            </section>
+
+            <section class="panel">
+              <div class="panel-head">
+                <h3>閹存垹娈戦绾﹂崙顓＄槈</h3>
+                <span>{{ bookedSalonIds.length }} 閸﹀搫鍑￠绾?/span>
+              </div>
+              <el-empty v-if="bookedSalonIds.length === 0" description="閺嗗倹妫ら绾? />
+              <div v-else class="ticket-list">
+                <div v-for="ticket in bookedSalons" :key="ticket.id" class="ticket">
+                  <strong>{{ ticket.title }}</strong>
+                  <span>{{ ticket.date }} 璺?{{ ticket.place }}</span>
+                  <el-tag type="success">閸戭叀鐦夌爜{{ ticket.certificateCode }}</el-tag>
+                </div>
+              </div>
+            </section>
+          </div>
+          <el-dialog v-model="passwordDialogVisible" title="娣囶喗鏁肩櫥褰曞瘑鐮? width="460px">
+            <el-form label-position="top" @submit.prevent>
+              <el-form-item label="閺冄冪槕鐮?
+                <el-input
+                  v-model="passwordForm.oldPassword"
+                  type="password"
+                  show-password
+                  placeholder="鐠囩柉绶崗銉ョ秼閸撳秶娅ヨぐ鏇炵槕鐮?                />
+              </el-form-item>
+              <el-form-item label="鏂板瘑鐮?
+                <el-input
+                  v-model="passwordForm.newPassword"
+                  type="password"
+                  show-password
+                  placeholder="6-18 娴ｅ秴鐡уВ宥勭瑢閺佹澘鐡х紒鍕値"
+                />
+              <div class="form-tip">瀵嗙爜涓?6-18 浣嶅瓧姣嶄笌鏁板瓧缁勫悎銆?/div>
+              </el-form-item>
+              <el-form-item label="绾喛顓绘柊瀵嗙爜>
+                <el-input
+                  v-model="passwordForm.confirmPassword"
+                  type="password"
+                  show-password
+                  placeholder="鐠囧嘲鍟€濞喡ょ翻閸忋儲鏌婂瘑鐮?
+                  @keyup.enter="changePassword"
+                />
+              </el-form-item>
+            </el-form>
+            <template #footer>
+              <el-button @click="passwordDialogVisible = false">鍙栨秷</el-button>
+              <el-button type="primary" :loading="passwordChanging" @click="changePassword">绾喛顓绘穱顔芥暭</el-button>
+            </template>
+          </el-dialog>
+        </section>
+
+        <section v-if="activeView === 'admin'" class="view">
+          <el-alert
+            title="鍚庡彴濠曟梻銇氶敍姘鳖吀閻炲棗鎲抽崣顖欎簰瀹℃牳璧勬簮閵嗕礁宕ョ€诡潿鈧焦鐭欐Λ娆嶁偓浣虹矋闂冪喍淇婇幁顖ょ礉楠炶埖鐗撮幑顔垮姎閺佸繑濡ч懗鑺ョ垼缁涙崘绻樼悰灞兼眽瀹搞儲鎸抽崥鍫涒偓?
+            type="warning"
+            :closable="false"
+          />
+          <div class="admin-grid">
+            <section class="panel">
+              <div class="panel-head">
+                <h3>瀵板懎顓搁弽绋垮敶鐎?/h3>
+                <div class="head-actions">
+                  <el-button
+                    type="success"
+                    plain
+                    size="small"
+                    :disabled="selectedReviewIds.length === 0"
+                    @click="reviewSelected('APPROVED')"
+                  >
+                    閹靛綊鍣洪柅姘崇箖瀹℃牳
+                  </el-button>
+                  <el-button
+                    type="info"
+                    plain
+                    size="small"
+                    :disabled="selectedReviewIds.length === 0"
+                    @click="reviewSelected('REJECTED')"
+                  >
+                    閹靛綊鍣烘す鍐叉礀鐢宠
+                  </el-button>
+                  <el-button
+                    type="danger"
+                    plain
+                    size="small"
+                    :disabled="selectedReviewIds.length === 0"
+                    @click="deleteSelectedReviews"
+                  >
+                    閹靛綊鍣哄垹闄?                  </el-button>
+                  <el-tag type="warning">{{ reviewPage.total }} 閺?/el-tag>
+                </div>
+              </div>
+              <el-table :data="reviewQueue" height="360" @selection-change="selectReviews">
+                <el-table-column type="selection" width="44" />
+                <el-table-column prop="type" label="绫诲瀷" width="110" />
+                <el-table-column prop="title" label="鏍囬" />
+                <el-table-column prop="owner" label="鎻愪氦娴? width="120" />
+                <el-table-column label="閹垮秳缍? width="170">
+                  <template #default="{ row }">
+                    <el-button size="small" type="success" @click="reviewItem(row, 'APPROVED')">闁俺绻?/el-button>
+                    <el-button size="small" type="danger" plain @click="reviewItem(row, 'REJECTED')">妞瑰啿娲?/el-button>
+                  </template>
+                </el-table-column>
+              </el-table>
+              <el-pagination
+                class="pager compact-pager"
+                background
+                layout="prev, pager, next, total"
+                :current-page="reviewPage.current"
+                :page-size="reviewPage.size"
+                :total="reviewPage.total"
+                @current-change="changeReviewPage"
+              />
+            </section>
+
+            <section class="panel">
+              <div class="panel-head">
+                <h3>绾㈠鍚庡彴</h3>
+                <el-tag>閼磋鲸鏅遍悽璇插剼</el-tag>
+              </div>
+              <div v-for="candidate in candidates" :key="candidate.id" class="candidate">
+                <div>
+                  <strong>{{ candidate.maskedName }}</strong>
+                  <span>{{ candidate.grade }} 璺?{{ candidate.intent }}</span>
+                </div>
+                <div class="skill-row">
+                  <el-tag v-for="skill in candidate.skills" :key="skill" size="small">{{ skill }}</el-tag>
+                </div>
+                <el-button type="primary" plain size="small">閸旂姴鍙嗙痪澶哥瑓閻楃數鍤庡Ч?/el-button>
+              </div>
+            </section>
+          </div>
+
+          <section class="panel">
+            <div class="panel-head">
+              <h3>閸忋儵妲︾敵璇?/h3>
+              <div class="head-actions">
+                <el-button
+                  type="primary"
+                  plain
+                  size="small"
+                  :disabled="selectedAdminApplicationIds.length === 0"
+                  @click="approveSelectedAdminApplications"
+                >
+                  閹靛綊鍣哄悓鎰?                </el-button>
+                <el-button
+                  type="danger"
+                  plain
+                  size="small"
+                  :disabled="selectedAdminApplicationDeleteIds.length === 0"
+                  @click="deleteSelectedAdminApplications"
+                >
+                  閹靛綊鍣哄垹闄ょ拋鏉跨秿
+                </el-button>
+                <el-tag type="success">{{ teamApplications.length }} 閺?/el-tag>
+              </div>
+            </div>
+            <el-table :data="teamApplications" stripe @selection-change="selectAdminApplications">
+              <el-table-column type="selection" width="55" />
+              <el-table-column prop="teamTitle" label="闃熶紞" />
+              <el-table-column prop="applicant" label="鐢宠娴? width="180" />
+              <el-table-column prop="skillsText" label="閹垛偓閼崇晫鏁鹃崓? />
+              <el-table-column prop="status" label="鐘舵€?width="110" />
+              <el-table-column label="閹垮秳缍? width="150">
+                <template #default="{ row }">
+                  <el-button size="small" type="primary" :disabled="row.rawStatus !== 'PENDING'" @click="approveTeamApplication(row)">鍚屾剰閸忋儵妲?/el-button>
+                  <el-button size="small" type="danger" plain @click="deleteTeamApplication(row)">鍒犻櫎</el-button>
+                </template>
+              </el-table-column>
+            </el-table>
+          </section>
+
+          <section class="panel">
+            <div class="panel-head">
+              <h3>娌欓緳棰勭害绠＄悊</h3>
+              <div class="head-actions">
+                <el-button type="primary" plain @click="exportSalonAppointments">鐎电厧鍤绾︽暟鎹?(Excel)</el-button>
+                <el-tag type="success">{{ salonAppointments.length }} 閺?/el-tag>
+              </div>
+            </div>
+            <el-table :data="salonAppointments" stripe>
+              <el-table-column prop="salonTitle" label="娌欓緳" />
+              <el-table-column prop="userNickname" label="棰勭害娴? width="140" />
+              <el-table-column prop="certificateCode" label="閸戭叀鐦夌爜 />
+              <el-table-column prop="status" label="鐘舵€?width="110" />
+              <el-table-column label="閹垮秳缍? width="210">
+                <template #default="{ row }">
+                  <el-button v-if="row.rawStatus === 'BOOKED'" size="small" type="warning" plain @click="cancelSalonAppointment(row)">鍙栨秷棰勭害</el-button>
+                  <el-button v-else size="small" type="danger" plain @click="deleteSalonAppointment(row)">鍒犻櫎鐠佹澘缍?/el-button>
+                </template>
+              </el-table-column>
+            </el-table>
+          </section>
+
+          <section class="panel" v-if="currentUser.role === 'superAdmin'">
+            <div class="panel-head">
+              <h3>瓒呯骇绠＄悊鍛?鈥?绠＄悊鍛樼鐞?/h3>
+              <el-tag type="danger">SUPER_ADMIN</el-tag>
+            </div>
+            <p>閫氳繃涓嬫柟杈撳叆鐢ㄦ埛 ID 杩涜绠＄悊銆?/p>
+            <el-form label-position="top">
+              <el-form-item label="鐩爣鐢ㄦ埛 ID">
+                <el-input v-model="superAdminTargetUserId" placeholder="杈撳叆鐢ㄦ埛 ID" type="number" />
+              </el-form-item>
+              <div class="card-actions" style="justify-content: flex-start;">
+                <el-button type="primary" @click="promoteAdmin(Number(superAdminTargetUserId))">璁句负绠＄悊鍛?/el-button>
+                <el-button type="warning" plain @click="demoteAdmin(Number(superAdminTargetUserId))">鍙栨秷绠＄悊鍛?/el-button>
+                <el-button type="danger" @click="transferSuperAdmin(Number(superAdminTargetUserId))">杞瓒呯骇绠＄悊鍛?/el-button>
+              </div>
+            </el-form>
+          </section>
+          <section class="panel">
+            <div class="panel-head">
+              <h3>鎺ㄨ崘鍚庣鏋舵瀯钀界偣</h3>
+              <el-tag type="success">Spring Boot / NestJS</el-tag>
+            </div>
+            <div class="architecture-list">
+              <div v-for="arch in architecture" :key="arch.title">
+                <strong>{{ arch.title }}</strong>
+                <span>{{ arch.desc }}</span>
+              </div>
+            </div>
+          </section>
+        </section>
+      </el-main>
+    </el-container>
+  </el-container>
+</template>
+
+<script setup lang="ts">
+import MarkdownIt from 'markdown-it'
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import {
+  ArrowLeft,
+  Calendar,
+  ChatLineRound,
+  Connection,
+  DataBoard,
+  Download,
+  EditPen,
+  FolderOpened,
+  Location,
+  Lock,
+  Plus,
+  Position,
+  Search,
+  Setting,
+  SwitchButton,
+  Trophy,
+  Upload,
+  User,
+  UserFilled,
+  View,
+} from '@element-plus/icons-vue'
+
+type Role = 'student' | 'mentor' | 'admin' | 'superAdmin'
+type CommentReply = {
+  id: number
+  author: string
+  text: string
+}
+type BlogComment = CommentReply & {
+  replies: CommentReply[]
+}
+type BlogSocialView = {
+  likes: number
+  collects: number
+  liked: boolean
+  collected: boolean
+  followed: boolean
+}
+type ResourceView = {
+  id: number
+  uploaderId: number
+  contest: string
+  type: string
+  title: string
+  summary: string
+  downloads: number
+  uploader: string
+}
+type HotResourceView = {
+  id: number
+  title: string
+  contest: string
+  type: string
+  downloads: number
+}
+type BlogView = {
+  id: number
+  authorId: number
+  title: string
+  author: string
+  alias: string
+  cert: string
+  contestTag: string
+  anonymous: boolean
+  visibility: string
+  commentsOpen: boolean
+  content: string
+  social: BlogSocialView
+  comments: BlogComment[]
+}
+type SalonView = {
+  id: number
+  title: string
+  speaker: string
+  date: string
+  month: string
+  day: string
+  place: string
+  capacity: number
+  booked: number
+  description: string
+}
+type TicketView = SalonView & {
+  certificateCode: string
+}
+type TeamView = {
+  id: number
+  leaderId: number
+  contest: string
+  title: string
+  need: string
+  skills: string[]
+  status: string
+  contact: string
+  applied: boolean
+  unlocked: boolean
+  applicationId?: number
+  applications: TeamApplicationView[]
+  members: TeamMemberView[]
+}
+type TeamApplicationView = {
+  id: number
+  teamId: number
+  leaderId: number
+  teamTitle: string
+  applicant: string
+  applicantId: number
+  skills: string[]
+  skillsText: string
+  status: string
+  rawStatus: string
+}
+type TeamMemberView = {
+  teamId: number
+  leaderId: number
+  teamTitle: string
+  userId: number
+  member: string
+  role: string
+  rawRole: string
+  skills: string[]
+  skillsText: string
+}
+type ReviewView = {
+  id: number
+  type: string
+  targetType?: string
+  targetId?: number
+  title: string
+  owner: string
+  status: string
+}
+type CandidateView = {
+  id: number
+  maskedName: string
+  grade: string
+  intent: string
+  skills: string[]
+}
+type SalonAppointmentView = {
+  id: number
+  salonTitle: string
+  userNickname: string
+  certificateCode: string
+  status: string
+  rawStatus: string
+}
+
+const md = new MarkdownIt({ html: false, linkify: true, breaks: true })
+const API_BASE = 'http://127.0.0.1:8099/api'
+const TOKEN_KEY = 'competition-hub-token'
+const ROLE_KEY = 'competition-hub-role'
+let sessionExpiredNotified = false
+const activeView = ref('dashboard')
+const selectedRole = ref<Role>((localStorage.getItem(ROLE_KEY) as Role) || 'admin')
+const authTab = ref<'password' | 'register'>('password')
+const bookedSalonIds = ref<number[]>([])
+const bookedSalons = ref<TicketView[]>([])
+const teamStep = ref(0)
+const teamTab = ref('hall')
+const teamEditorVisible = ref(false)
+const teamKeyword = ref('')
+const teamContest = ref('')
+const resourceKeyword = ref('')
+const resourceContest = ref('')
+const resourceType = ref('')
+const resourceEditorVisible = ref(false)
+const selectedResourceIds = ref<number[]>([])
+const selectedReviewIds = ref<number[]>([])
+const selectedManageableApplicationIds = ref<number[]>([])
+const selectedManageableApplicationDeleteIds = ref<number[]>([])
+const selectedAdminApplicationIds = ref<number[]>([])
+const selectedAdminApplicationDeleteIds = ref<number[]>([])
+const superAdminTargetUserId = ref('')
+const token = ref(localStorage.getItem(TOKEN_KEY) || '')
+const loggedInUser = ref<any>(null)
+const loading = ref(false)
+const codeSending = ref(false)
+const resetCodeSending = ref(false)
+const resettingPassword = ref(false)
+const resetPasswordVisible = ref(false)
+const firstLoginDialogVisible = ref(false)
+const passwordDialogVisible = ref(false)
+const passwordChanging = ref(false)
+const isApplyingAuth = ref(false)
+const commentDrafts = reactive<Record<number, string>>({})
+
+const users = {
+  student: { id: 1, studentNo: '20230118', username: 'student', name: '闄堝悓瀛?, avatar: '闄?, role: 'student', roleLabel: '鏅€氬鐢? },
+  mentor: { id: 2, studentNo: 'M2026', username: 'mentor', name: '鏋楀濮?, avatar: '鏋?, role: 'mentor', roleLabel: '鐗归個涓撳 路 鍥藉寰椾富' },
+  admin: { id: 3, studentNo: 'ADMIN', username: 'admin', name: '绠＄悊鍛?, avatar: '绠?, role: 'admin', roleLabel: '骞冲彴绠＄悊鍛? },
+  superAdmin: { id: 3, studentNo: 'ADMIN', username: 'admin', name: '瓒呯骇绠＄悊鍛?, avatar: '瓒?, role: 'superAdmin', roleLabel: '骞冲彴瓒呯骇绠＄悊鍛? },
+} as const
+
+const loginForm = reactive({
+  username: '',
+  password: '',
+})
+const registerForm = reactive({
+  studentNo: '',
+  nickname: '',
+  phone: '',
+  email: '',
+  code: '',
+  password: '',
+})
+const resetPasswordForm = reactive({
+  email: '',
+  code: '',
+  newPassword: '',
+})
+const passwordForm = reactive({
+  oldPassword: '',
+  newPassword: '',
+  confirmPassword: '',
+})
+const isLoggedIn = computed(() => Boolean(token.value))
+const currentUser = computed(() => {
+  const fallback = users[selectedRole.value]
+  if (!loggedInUser.value) {
+    return fallback
+  }
+  const role = String(loggedInUser.value.role || fallback.role).toLowerCase() as Role
+  return {
+    ...fallback,
+    id: loggedInUser.value.id || fallback.id,
+    username: loggedInUser.value.username || fallback.username,
+    name: loggedInUser.value.nickname || fallback.name,
+    avatar: (loggedInUser.value.nickname || fallback.avatar).slice(0, 1),
+    role,
+    roleLabel: role === 'superAdmin' ? '骞冲彴瓒呯骇绠＄悊鍛? : role === 'admin' ? '骞冲彴绠＄悊鍛? : role === 'mentor' ? '鐗归個涓撳 路 鍥藉寰椾富' : '鏅€氬鐢?,
+  }
+})
+const resourcePage = reactive({ current: 1, size: 8, total: 0 })
+const blogPage = reactive({ current: 1, size: 6, total: 0 })
+const salonPage = reactive({ current: 1, size: 6, total: 0 })
+const reviewPage = reactive({ current: 1, size: 8, total: 0 })
+const teamPage = reactive({ current: 1, size: 6, total: 0 })
+const teamApplicationPage = reactive({ current: 1, size: 8, total: 0 })
+const teamMemberPage = reactive({ current: 1, size: 8, total: 0 })
+const blogKeyword = ref('')
+const blogContest = ref('')
+const blogVisibility = ref('')
+const blogEditorMode = ref<'markdown' | 'text'>('markdown')
+const editingBlogId = ref<number | null>(null)
+const activeBlog = ref<BlogView | null>(null)
+const socialPending = reactive({ like: false, collect: false, follow: false })
+const creatorStats = reactive({ totalLikes: 0, totalCollects: 0, followers: 0, works: 0 })
+const resourceEditor = reactive<{ id: number | null; title: string; contest: string; type: string; summary: string }>({
+  id: null,
+  title: '',
+  contest: '',
+  type: '',
+  summary: '',
+})
+const viewTitle = computed(() => ({
+  dashboard: '绯荤粺閹槒顫?,
+  resources: '绔炶禌璧勬簮搴?
+  blog: '瀛﹂暱瀛﹀鐠囧鐝电挧?,
+  blogEditor: editingBlogId.value ? '缂栬緫鍗氬' : '鍙戝竷鍗氬',
+  blogDetail: '鍗氬鐠囷附鍎?,
+  salon: '缁惧じ绗呮矙榫欐棩绋?,
+  teams: '閹垛偓閺堫垳瀛╂繛妯肩矋闂冪喎銇囬崢?,
+  profile: '涓汉闅愮涓績',
+  admin: '瀹℃牳娑撳海顓搁悶鍡楁倵閸?,
+}[activeView.value]))
+
+watch([resourceKeyword, resourceContest, resourceType], () => {
+  resourcePage.current = 1
+  void loadResources()
+})
+
+watch([blogKeyword, blogContest, blogVisibility], () => {
+  blogPage.current = 1
+  void loadBlogs()
+})
+
+watch([teamKeyword, teamContest], () => {
+  teamPage.current = 1
+  void loadTeams()
+})
+
+watch(teamTab, (tab) => {
+  if (tab === 'applications') {
+    void loadTeamApplications()
+  }
+  if (tab === 'members') {
+    void loadTeamMembers()
+  }
+})
+
+const metrics = reactive([
+  { key: 'resources', label: '绔炶禌璧勬簮', value: '0' },
+  { key: 'blogs', label: '缁忛獙鍗氬', value: '0' },
+  { key: 'salons', label: '娌欓緳娲诲姩', value: '0' },
+  { key: 'teams', label: '缁勯槦闇€姹? value: '0' },
+])
+
+const modules = [
+  { title: '閻劍鍩涙稉搴㈡綀闂勬劒缍嬬化?, desc: '鏅€氭艾顒熼悽鐔粹偓浣哄闁偓瀛﹂暱瀛﹀閵嗕胶顓搁悶鍡楁喅娑撳琚憴鎺曞閿涘本瀵滄潈闄愰崝銊︹偓浣哥潔缁€楦垮綅閸楁洑绗岄幙宥勭稊閵?, badge: 'RBAC', icon: Lock, color: 'blue', target: 'profile' },
+  { title: '绔炶禌璧勬簮搴? desc: '閹稿鐝电挧娑樻倳缁夋澘鎷拌祫鏂欑被鍨嬪Λ鈧槐顫礉涓嬭浇閺冦儱绻旈崣顖滄暏娴滃孩甯撶悰灞绢渷娑撳氦绁┃鎰腹閼芥劑鈧?, badge: 'OSS/COS', icon: FolderOpened, color: 'green', target: 'resources' },
+  { title: '鍗氬娑撳孩鐭欐Λ?, desc: 'Markdown 缁忛獙鐢牓鈧焦鐖查悩鎯扮槑鐠佹亽鈧胶鍤庢稉瀣煓姒瑩顣╃痪锕€鎷颁釜浜洪崙顓＄槈閵?, badge: 'Community', icon: EditPen, color: 'orange', target: 'blog' },
+  { title: '鎶€鏈? desc: '閸欏苯鎮滅涵顔款吇閸氬孩澧犵憴锝夋敚閼辨梻閮撮弬鐟扮础閿涘苯鎮楅崣鏉垮讲鍩轰簬閼磋鲸鏅遍悽璇插剼浜哄伐閻楃數鍤庨妴?, badge: 'Privacy Match', icon: Connection, color: 'red', target: 'teams' },
+]
+
+const advantages = [
+  { title: '娑撯偓缁旀瑥绱＄珵璧涙湇鍔?, desc: '璧勬簮閵嗕礁宕ョ€诡潿鈧焦鐭欐Λ娆忔嫲缁勯槦缂佺喍绔寸鐞嗛敍灞藉櫤鐏忔垳淇婇幁顖氬瀻閺侊絽鐢弶銉ф畱閸楀繋缍旈幋鎰拱閵?, icon: FolderOpened },
+  { title: '閸欏苯鎮滅涵顔款吇闅愮缁勯槦', desc: '鐢宠閵嗕線妲﹂梹鍨吀閺嶆悶鈧礁鎮撻幇蹇撴倵鐟欙綁鏀ｉ懕鏃傞兇閺傜懓绱￠敍灞肩箽閹躲倗婀＄€圭偛顫橀崥宥冣偓浣镐簳娣団€虫嫲閹靛婧€閸欐灚鈧?, icon: Lock },
+  { title: '妤傛ê鑻熼崣鎴濋挬濠婃垿顣╃痪?, desc: '娌欓緳閸氬秹顤傞幒褍鍩楅崪宀€绱︾€涙顓搁弫鏉垮瀻鐏炲倸顦╅悶鍡礉閺€顖涙嫼闂嗗棔鑵戦幎銉ユ倳閸︾儤娅欓妴?, icon: Calendar },
+  { title: '鍐呭濞屽绌╂稉搴㈠灇闂€鍨冀妫?, desc: '鍗氬娴滄帒濮╅妴浣界カ濠ф劖甯撶悰灞芥嫲閸掓稐缍旈懓鍛殶閹诡喚婀呴弶鍖＄礉鐠佲晝绮℃灞惧瘮缂侇厽绁﹂崝銊ｂ偓?, icon: DataBoard },
+]
+
+const contests = ['閽冩繃藟閺?, '婢垛晜顫挧?, '閺佹澘顒熷鐑樐?, 'ACM-ICPC', '閹告垶鍨弶?]
+const resourceTypes = ['閸樺棗鍕鹃惇鐔碱暯', '閼惧嘲顨涚拋鐑樻瀮', '缁犳纭剁捄顖滃殠', '閻滎垰顣ㄩ柊宥囩枂', '鐠佽弓绠熺拠鍙ユ']
+
+const resources = reactive<ResourceView[]>([])
+const hotResources = reactive<HotResourceView[]>([])
+const filteredResources = computed(() => resources)
+
+const draftBlog = reactive({
+  title: '閹存垹娈戦拑婵囁夐弶顖氼槵鐠ф稑顦查惄?,
+  contestTag: '閽冩繃藟閺?,
+  content: '## 鐠侇厾绮岄懞鍌氼殧\n\n- 閸撳秳琚遍崨銊ㄋ夌拠顓熺《閸滃本膩閺夌笚n- 娑擃參妫块崶娑樻噯閹稿绗撴０妯哄煕妫版n- 閺堚偓閸氬簼绔撮崨銊δ侀幏鐔荤婢跺秶娲廫n\n> 闁插秶鍋ｆ稉宥嗘Ц閸掑嘲绶辨径姘剧礉閼板本妲搁幎濠囨晩妫版ê褰夐幋鎰讲婢跺秶鏁ゆ總妤勭熅閵?,
+  imageUrl: '',
+  visibility: 'public',
+  anonymous: false,
+  commentsOpen: true,
+})
+
+const blogs = reactive<BlogView[]>([])
+
+const renderedDraft = computed(() => blogEditorMode.value === 'markdown' ? renderMarkdown(draftBlog.content) : renderPlainText(draftBlog.content))
+
+const salons = reactive<SalonView[]>([])
+
+const allSkills = ['Python', 'Java', 'C++', '缁犳纭?, '瀵ょ儤膩', '鐠佺儤鏋冮崘娆庣稊', '閸欘垵顫嬮崠?, '閸撳秶顏?, '閸氬海顏?]
+const draftTeam = reactive({ title: '閺佹澘顒熷鐑樐侀弽陇绂岄槦浼嶉幏娑氱椽缁嬪澧?, need: '瀹稿弶婀佸鐑樐侀崪宀冾啈閺傚洤鎮撶€涳讣绱濈敮灞炬箿閹靛墽鍟涢幃?Python 閸欘垵顫嬮崠鏍︾瑢鏁版嵁婢跺嫮鎮婇惃鍕Е閸欏鈧?, skills: ['Python', '閸欘垵顫嬮崠?] })
+const teamEditor = reactive<{ id: number | null; title: string; contest: string; need: string; skills: string[] }>({
+  id: null,
+  title: '',
+  contest: '閼奉亜鐣炬稊澶岀彽鐠?,
+  need: '',
+  skills: [],
+})
+
+const teams = reactive<TeamView[]>([])
+const teamApplications = reactive<TeamApplicationView[]>([])
+const manageableTeamApplications = computed(() => teamApplications)
+const manageableTeamMembers = reactive<TeamMemberView[]>([])
+
+const privacyOptions = ['鐎瑰苯鍙忛殣钘?, '娴犲懐绮嶉梼鐔兼Е閸欏褰茬憴?, '鐎瑰苯鍙忓叕寮€']
+const privacy = reactive({
+  realName: '娴犲懐绮嶉梼鐔兼Е閸欏褰茬憴?,
+  wechat: '娴犲懐绮嶉梼鐔兼Е閸欏褰茬憴?,
+  phone: '鐎瑰苯鍙忛殣钘?,
+})
+
+const reviewQueue = reactive<ReviewView[]>([])
+const salonAppointments = reactive<SalonAppointmentView[]>([])
+
+const candidates = reactive<CandidateView[]>([])
+
+const architecture = [
+  { title: '璁よ瘉闁村瓨娼?, desc: 'JWT + 缂佺喍绔撮幏锔藉焻閸ｎ煉绱濋崥搴ｎ伂閹稿顫楅懝鎻掓嫲鏁版嵁瑜版帒鐫橀弽锟犵崣鐠佸潡妫舵潈闄愰妴? },
+  { title: '鏁版嵁瀛樺偍', desc: 'MySQL 8.0 娣囨繂鐡ㄦ稉姘鏁版嵁閿涘edis 娣囨繂鐡ㄩ绾︽惔鎾崇摠閵嗕箑oken閵嗕焦甯撶悰灞绢渷閵? },
+  { title: '闅愮瀹夊叏', desc: '瀵嗙爜娴ｈ法鏁?BCrypt閿涙稖浠堢化缁樻煙瀵繑瀵滃彲瑙佹惔锕€鎷扮粍闃熼悩鑸碘偓浣藉姎閺佸繗绻戦崶鐐偓? },
+  { title: '鏂囦欢璧勬簮', desc: '闂冨潡鍣锋禍?OSS / 閼垫崘顔嗘禍?COS 娣囨繂鐡ㄨ祫鏂欐稉搴″触鐎广垺褰冮崶鎾呯礉涓嬭浇闁剧偓甯撮惌顓熸閺堝鏅ラ妴? },
+]
+
+function renderMarkdown(source: string) {
+  return md.render(source)
+}
+
+function renderPlainText(source: string) {
+  const escaped = source
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+  return `<p>${escaped.replaceAll('\n', '<br>')}</p>`
+}
+
+async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const response = await fetch(`${API_BASE}${path}`, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token.value ? { Authorization: `Bearer ${token.value}` } : {}),
+      ...(options.headers || {}),
+    },
+  })
+  if (!response.ok) {
+    if (response.status === 401) {
+      handleSessionExpired()
+      throw new Error('鐧诲綍瀹歌尪绻冮張鐕傜礉鐠囩兘鍣搁弬鎵瑜?)
+    }
+    const text = await response.text()
+    throw new Error(text || `${response.status} ${response.statusText}`)
+  }
+  return response.json() as Promise<T>
+}
+
+function clearAuthStorage() {
+  token.value = ''
+  loggedInUser.value = null
+  localStorage.removeItem(TOKEN_KEY)
+  localStorage.removeItem(ROLE_KEY)
+  sessionStorage.removeItem(TOKEN_KEY)
+  sessionStorage.removeItem(ROLE_KEY)
+}
+
+function handleSessionExpired() {
+  if (sessionExpiredNotified) return
+  sessionExpiredNotified = true
+  clearAuthStorage()
+  ElMessage.warning('鐧诲綍瀹歌尪绻冮張鐕傜礉鐠囩兘鍣搁弬鎵瑜?)
+  window.setTimeout(() => {
+    window.location.href = '/login'
+  }, 500)
+}
+
+async function confirmAction(message: string) {
+  await ElMessageBox.confirm(message, '閹垮秳缍旂涵顔款吇', {
+    confirmButtonText: '绾喖鐣?,
+    cancelButtonText: '鍙栨秷',
+    type: 'warning',
+  })
+}
+
+async function loginAndLoad() {
+  if (!loginForm.username.trim()) {
+    ElMessage.warning('璇疯緭鍏ュ鍙?宸ュ彿')
+    return
+  }
+  if (!validatePassword(loginForm.password)) {
+    ElMessage.warning('瀵嗙爜闂団偓涓?-18 娴ｅ秴鐡уВ宥勭瑢閺佹澘鐡х紒鍕値')
+    return
+  }
+  loading.value = true
+  try {
+    const login = await fetch(`${API_BASE}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: loginForm.username, password: loginForm.password }),
+    })
+    if (!login.ok) {
+      throw new Error(await resolveLoginError(login))
+    }
+    const data = await login.json()
+    await applyLoginResult(data)
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '鐧诲綍婢惰精瑙﹂敍姘冲閸欓攱鍨ㄥ瘑鐮侀柨娆掝嚖閿涘矁顕柌宥嗘煀鏉堟挸鍙?)
+  } finally {
+    loading.value = false
+  }
+}
+
+async function resolveLoginError(response: Response) {
+  const fallback = response.status === 401 || response.status === 403
+    ? '鐧诲綍婢惰精瑙﹂敍姘冲閸欓攱鍨ㄥ瘑鐮侀柨娆掝嚖閿涘矁顕柌宥嗘煀鏉堟挸鍙?
+    : '鐧诲綍婢惰精瑙﹂敍姘箛閸斺剝娈忛弮鏈电瑝閸欘垳鏁ら敍宀冾嚞缁嬪秴鎮楅崘宥堢槸'
+  const raw = await response.text()
+  if (!raw) return fallback
+  try {
+    const parsed = JSON.parse(raw)
+    const message = parsed.message || parsed.error || parsed.detail
+    if (typeof message === 'string' && message.trim()) {
+      if (/閻劍鍩涢崥宄惧瘑鐮亅Bad credentials|Unauthorized|Forbidden/i.test(message)) {
+        return '鐧诲綍婢惰精瑙﹂敍姘冲閸欓攱鍨ㄥ瘑鐮侀柨娆掝嚖閿涘矁顕柌宥嗘煀鏉堟挸鍙?
+      }
+      if (/lock|locked|缁備胶鏁闁夸礁鐣?i.test(message)) {
+        return '璐﹀彿瀹歌尪顫﹂柨浣哥暰閿涘矁顕懕鏃傞兇绠＄悊閸?
+      }
+      return `鐧诲綍婢惰精瑙﹂敍?{message}`
+    }
+  } catch {
+    if (/閻劍鍩涢崥宄惧瘑鐮亅Unauthorized|Forbidden|401|403/i.test(raw)) {
+      return '鐧诲綍婢惰精瑙﹂敍姘冲閸欓攱鍨ㄥ瘑鐮侀柨娆掝嚖閿涘矁顕柌宥嗘煀鏉堟挸鍙?
+    }
+  }
+  return fallback
+}
+
+async function sendEmailCode() {
+  if (!registerForm.email) {
+    ElMessage.warning('鐠囧嘲鍘涙繅顐㈠晸閭')
+    return
+  }
+  codeSending.value = true
+  try {
+    const response = await fetch(`${API_BASE}/auth/email/code`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: registerForm.email }),
+    })
+    if (!response.ok) throw new Error(await response.text() || '楠岃瘉閻礁褰傞柅浣搞亼鐠?)
+    ElMessage.success('楠岃瘉閻礁鍑″彂閫佷緤绱濈拠宄版躬 5 閸掑棝鎸撻崘鍛暚閹存劖鏁為崘?)
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '楠岃瘉閻礁褰傞柅浣搞亼鐠?)
+  } finally {
+    codeSending.value = false
+  }
+}
+
+async function sendResetPasswordCode() {
+  if (!resetPasswordForm.email) {
+    ElMessage.warning('鐠囧嘲鍘涙繅顐㈠晸娉ㄥ唽閭')
+    return
+  }
+  resetCodeSending.value = true
+  try {
+    const response = await fetch(`${API_BASE}/auth/email/code`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: resetPasswordForm.email }),
+    })
+    if (!response.ok) throw new Error(await response.text() || '楠岃瘉閻礁褰傞柅浣搞亼鐠?)
+    ElMessage.success('楠岃瘉閻礁鍑″彂閫佷緤绱濈拠宄版躬 5 閸掑棝鎸撻崘鍛暚閹存劕鐦戦惍渚€鍣哥純?)
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '楠岃瘉閻礁褰傞柅浣搞亼鐠?)
+  } finally {
+    resetCodeSending.value = false
+  }
+}
+
+async function resetPassword() {
+  if (!validatePassword(resetPasswordForm.newPassword)) {
+    ElMessage.warning('閺傛澘鐦戦惍渚€娓朵负6-18 娴ｅ秴鐡уВ宥勭瑢閺佹澘鐡х紒鍕値')
+    return
+  }
+  resettingPassword.value = true
+  try {
+    const response = await fetch(`${API_BASE}/auth/reset-password`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(resetPasswordForm),
+    })
+    if (!response.ok) throw new Error(await response.text() || '瀵嗙爜闁插秶鐤嗘径杈Е')
+    resetPasswordVisible.value = false
+    resetPasswordForm.code = ''
+    resetPasswordForm.newPassword = ''
+    ElMessage.success('瀵嗙爜瀹告煡鍣哥純顕嗙礉鐠囪渹濞囬悽銊︽煀瀵嗙爜鐧诲綍')
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '瀵嗙爜闁插秶鐤嗘径杈Е')
+  } finally {
+    resettingPassword.value = false
+  }
+}
+
+async function registerByEmail() {
+  if (!validatePassword(registerForm.password)) {
+    ElMessage.warning('瀵嗙爜闂団偓涓?-18 娴ｅ秴鐡уВ宥勭瑢閺佹澘鐡х紒鍕値')
+    return
+  }
+  loading.value = true
+  try {
+    const response = await fetch(`${API_BASE}/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(registerForm),
+    })
+    if (!response.ok) throw new Error(await response.text() || '濞夈劌鍞芥径杈Е')
+    await applyLoginResult(await response.json())
+    ElMessage.success('濞夈劌鍞介幋鎰閿涘苯鍑¤嚜鍔ㄧ櫥褰?)
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '濞夈劌鍞芥径杈Е')
+  } finally {
+    loading.value = false
+  }
+}
+
+function validatePassword(password: string) {
+  return /^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{6,18}$/.test(password)
+}
+
+function openPasswordDialog() {
+  passwordForm.oldPassword = ''
+  passwordForm.newPassword = ''
+  passwordForm.confirmPassword = ''
+  passwordDialogVisible.value = true
+}
+
+async function changePassword() {
+  if (!passwordForm.oldPassword) {
+    ElMessage.warning('鐠囩柉绶崗銉︽＋瀵嗙爜')
+    return
+  }
+  if (!validatePassword(passwordForm.newPassword)) {
+    ElMessage.warning('閺傛澘鐦戦惍渚€娓朵负6-18 娴ｅ秴鐡уВ宥勭瑢閺佹澘鐡х紒鍕値')
+    return
+  }
+  if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+    ElMessage.warning('娑撱倖顐兼潏鎾冲弳閻ㄥ嫭鏌婂瘑鐮佹稉宥勭閼?)
+    return
+  }
+  passwordChanging.value = true
+  try {
+    await api('/user/password', {
+      method: 'PUT',
+      body: JSON.stringify({
+        oldPassword: passwordForm.oldPassword,
+        newPassword: passwordForm.newPassword,
+      }),
+    })
+    passwordDialogVisible.value = false
+    passwordForm.oldPassword = ''
+    passwordForm.newPassword = ''
+    passwordForm.confirmPassword = ''
+    ElMessage.success('鐧诲綍瀵嗙爜瀹歌弓鎱ㄩ弨?)
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '瀵嗙爜娣囶喗鏁兼径杈Е')
+  } finally {
+    passwordChanging.value = false
+  }
+}
+
+async function applyLoginResult(data: any) {
+  token.value = data.accessToken
+  loggedInUser.value = data.user
+  const role = String(data.user?.role || '').toLowerCase() as Role
+  if (role === 'student' || role === 'mentor' || role === 'admin' || role === 'superAdmin') {
+    isApplyingAuth.value = true
+    selectedRole.value = role
+    isApplyingAuth.value = false
+  }
+  localStorage.setItem(TOKEN_KEY, token.value)
+  localStorage.setItem(ROLE_KEY, selectedRole.value)
+  if (data.firstLoginPrompted === false && role === 'superAdmin') {
+    firstLoginDialogVisible.value = true
+  }
+  await refreshAll()
+}
+
+function logout() {
+  firstLoginDialogVisible.value = false
+  clearAuthStorage()
+  bookedSalonIds.value = []
+  bookedSalons.value = []
+  resources.splice(0, resources.length)
+  blogs.splice(0, blogs.length)
+  salons.splice(0, salons.length)
+  teams.splice(0, teams.length)
+  reviewQueue.splice(0, reviewQueue.length)
+  salonAppointments.splice(0, salonAppointments.length)
+  candidates.splice(0, candidates.length)
+  navigateTo('dashboard')
+  ElMessage.success('瀹告煡鈧偓閸戣櫣娅ヨぐ?)
+}
+
+function goBack() {
+  window.history.back()
+}
+
+function handleUserCommand(command: string) {
+  if (command === 'logout') {
+    logout()
+    return
+  }
+  if (command === 'profile') {
+    navigateTo('profile')
+  }
+}
+
+async function refreshAll() {
+  await Promise.all([
+    loadOverview(),
+    loadCreatorStats(),
+    loadResources(),
+    loadHotResources(),
+    loadBlogs(),
+    loadSalons(),
+    loadBookings(),
+    loadTeams(),
+    selectedRole.value === 'admin' ? loadAdmin() : Promise.resolve(),
+  ])
+}
+
+const routeByView: Record<string, string> = {
+  dashboard: '/',
+  resources: '/resources',
+  blog: '/blogs',
+  blogEditor: '/blogs/editor',
+  blogDetail: '/blogs/detail',
+  salon: '/salons',
+  teams: '/teams',
+  profile: '/profile',
+  admin: '/admin',
+}
+
+const viewByRoute = Object.fromEntries(Object.entries(routeByView).map(([view, path]) => [path, view]))
+
+function viewFromLocation(pathname = window.location.pathname) {
+  return viewByRoute[pathname] || 'dashboard'
+}
+
+function syncViewFromLocation() {
+  activeView.value = viewFromLocation()
+}
+
+function navigateTo(view: string) {
+  const targetView = routeByView[view] ? view : 'dashboard'
+  activeView.value = targetView
+  const nextPath = routeByView[targetView]
+  if (window.location.pathname !== nextPath) {
+    window.history.pushState({ view: targetView }, '', nextPath)
+  }
+}
+
+function queryString(params: Record<string, string | number | undefined>) {
+  const search = new URLSearchParams()
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== '') {
+      search.set(key, String(value))
+    }
+  })
+  return search.toString()
+}
+
+async function loadResources() {
+  const query = queryString({
+    page: resourcePage.current,
+    size: resourcePage.size,
+    keyword: resourceKeyword.value.trim(),
+    contest: resourceContest.value,
+    type: resourceType.value,
+  })
+  const data = await api<any>(`/resources?${query}`)
+  const records = Array.isArray(data) ? data : data.records
+  resourcePage.total = Array.isArray(data) ? records.length : data.total
+  resourcePage.current = Array.isArray(data) ? resourcePage.current : data.current
+  resourcePage.size = Array.isArray(data) ? resourcePage.size : data.size
+  selectedResourceIds.value = []
+  resources.splice(0, resources.length, ...records.map((item: any) => ({
+    id: item.id,
+    uploaderId: item.uploaderId,
+    contest: item.contest,
+    type: item.type,
+    title: item.title,
+    summary: item.summary,
+    downloads: item.downloadCount,
+    uploader: item.uploader,
+  })))
+}
+
+async function loadHotResources() {
+  const data = await api<any[]>('/resources/hot-ranking')
+  hotResources.splice(0, hotResources.length, ...data.map((item) => ({
+    id: item.id,
+    title: item.title,
+    contest: item.contest,
+    type: item.type,
+    downloads: item.downloads || 0,
+  })))
+}
+
+async function loadOverview() {
+  const data = await api<Record<string, number>>('/overview')
+  metrics.forEach((metric) => {
+    metric.value = String(data[metric.key] ?? 0)
+  })
+}
+
+async function loadCreatorStats() {
+  const data = await api<any>('/blogs/creator-center')
+  creatorStats.totalLikes = data.totalLikes || 0
+  creatorStats.totalCollects = data.totalCollects || 0
+  creatorStats.followers = data.followers || 0
+  creatorStats.works = data.works || 0
+}
+
+async function loadBlogs() {
+  const query = queryString({
+    page: blogPage.current,
+    size: blogPage.size,
+    keyword: blogKeyword.value.trim(),
+    contestTag: blogContest.value,
+    visibility: blogVisibility.value,
+  })
+  const data = await api<any>(`/blogs?${query}`)
+  const records = Array.isArray(data) ? data : data.records
+  blogPage.total = Array.isArray(data) ? records.length : data.total
+  blogPage.current = Array.isArray(data) ? blogPage.current : data.current
+  blogPage.size = Array.isArray(data) ? blogPage.size : data.size
+  blogs.splice(0, blogs.length, ...records.map(mapBlog))
+}
+
+async function loadSalons() {
+  const query = queryString({ page: salonPage.current, size: salonPage.size })
+  const data = await api<any>(`/salons?${query}`)
+  const records = Array.isArray(data) ? data : data.records
+  salonPage.total = Array.isArray(data) ? records.length : data.total
+  salonPage.current = Array.isArray(data) ? salonPage.current : data.current
+  salonPage.size = Array.isArray(data) ? salonPage.size : data.size
+  salons.splice(0, salons.length, ...records.map(mapSalon))
+}
+
+async function loadBookings() {
+  const data = await api<any[]>('/salons/me/bookings')
+  bookedSalonIds.value = data.map((item) => item.salon.id)
+  bookedSalons.value = data.map((item) => ({
+    ...mapSalon(item.salon),
+    certificateCode: item.certificateCode,
+  }))
+}
+
+async function loadTeams() {
+  const query = queryString({
+    page: teamPage.current,
+    size: teamPage.size,
+    keyword: teamKeyword.value.trim(),
+    contest: teamContest.value,
+  })
+  const data = await api<any>(`/teams?${query}`)
+  const records = Array.isArray(data) ? data : data.records
+  teamPage.total = Array.isArray(data) ? records.length : data.total
+  teamPage.current = Array.isArray(data) ? teamPage.current : data.current
+  teamPage.size = Array.isArray(data) ? teamPage.size : data.size
+  teams.splice(0, teams.length, ...records.map(mapTeam))
+}
+
+async function loadTeamApplications() {
+  const query = queryString({ page: teamApplicationPage.current, size: teamApplicationPage.size })
+  const data = await api<any>(`/teams/applications/manageable?${query}`)
+  const records = Array.isArray(data) ? data : data.records
+  teamApplicationPage.total = Array.isArray(data) ? records.length : data.total
+  teamApplicationPage.current = Array.isArray(data) ? teamApplicationPage.current : data.current
+  teamApplicationPage.size = Array.isArray(data) ? teamApplicationPage.size : data.size
+  selectedManageableApplicationIds.value = []
+  selectedManageableApplicationDeleteIds.value = []
+  teamApplications.splice(0, teamApplications.length, ...records.map(mapTeamApplication))
+}
+
+async function loadTeamMembers() {
+  const query = queryString({ page: teamMemberPage.current, size: teamMemberPage.size })
+  const data = await api<any>(`/teams/members/manageable?${query}`)
+  const records = Array.isArray(data) ? data : data.records
+  teamMemberPage.total = Array.isArray(data) ? records.length : data.total
+  teamMemberPage.current = Array.isArray(data) ? teamMemberPage.current : data.current
+  teamMemberPage.size = Array.isArray(data) ? teamMemberPage.size : data.size
+  manageableTeamMembers.splice(0, manageableTeamMembers.length, ...records.map(mapTeamMemberRecord))
+}
+
+async function loadAdmin() {
+  const [reviews, pool, appointments] = await Promise.all([
+    api<any>(`/admin/reviews?${queryString({ page: reviewPage.current, size: reviewPage.size })}`),
+    api<any[]>('/admin/matchmaking'),
+    api<any[]>('/admin/salon-appointments'),
+  ])
+  const reviewRecords = Array.isArray(reviews) ? reviews : reviews.records
+  reviewPage.total = Array.isArray(reviews) ? reviewRecords.length : reviews.total
+  reviewPage.current = Array.isArray(reviews) ? reviewPage.current : reviews.current
+  reviewPage.size = Array.isArray(reviews) ? reviewPage.size : reviews.size
+  selectedReviewIds.value = []
+  reviewQueue.splice(0, reviewQueue.length, ...reviewRecords.map((item: any) => ({
+    id: item.id,
+    type: typeLabel(item.targetType),
+    targetType: item.targetType,
+    targetId: item.targetId,
+    title: item.title,
+    owner: item.owner,
+    status: statusLabel(item.status),
+  })))
+  candidates.splice(0, candidates.length, ...pool.map((item) => ({
+    id: item.userId,
+    maskedName: item.maskedName,
+    grade: '閼磋鲸鏅遍悽銊﹀煕',
+    intent: '瀵板懏鎸抽崥?,
+    skills: item.skills,
+  })))
+  salonAppointments.splice(0, salonAppointments.length, ...appointments.map((item) => ({
+    id: item.id,
+    salonTitle: item.salonTitle,
+    userNickname: item.userNickname,
+    certificateCode: item.certificateCode,
+    rawStatus: item.status,
+    status: item.status === 'BOOKED' ? '瀹告煡顣╃痪? : '瀹告彃褰囧☉?,
+  })))
+}
+
+function mapBlog(item: any): BlogView {
+  return {
+    id: item.id,
+    authorId: item.authorId,
+    title: item.title,
+    author: typeof item.author === 'string' ? item.author : item.author?.nickname || '閸栧灝鎮曢悽銊﹀煕',
+    alias: '閸栧灝鎮曢崣鍌濈閼?,
+    cert: Array.isArray(item.author?.badges) ? item.author.badges.join(' / ') : '',
+    contestTag: item.contestTag || '缁忛獙閸掑棔闊?,
+    anonymous: item.anonymous,
+    visibility: String(item.visibility).toLowerCase(),
+    commentsOpen: item.commentsOpen,
+    content: item.content,
+    social: {
+      likes: item.social?.likes || 0,
+      collects: item.social?.collects || 0,
+      liked: Boolean(item.social?.liked),
+      collected: Boolean(item.social?.collected),
+      followed: Boolean(item.social?.followed),
+    },
+    comments: (item.comments || []).map((comment: any) => ({
+      id: comment.id,
+      author: comment.author,
+      text: comment.content,
+      replies: (comment.replies || []).map((reply: any) => ({
+        id: reply.id,
+        author: reply.author,
+        text: reply.content,
+      })),
+    })),
+  }
+}
+
+function mapSalon(item: any): SalonView {
+  const date = new Date(item.startsAt)
+  const month = Number.isNaN(date.getTime()) ? '閺冦儲婀? : `${date.getMonth() + 1}閺堝潉
+  const day = Number.isNaN(date.getTime()) ? '--' : String(date.getDate()).padStart(2, '0')
+  return {
+    id: item.id,
+    title: item.title,
+    speaker: item.speaker || '閻楀綊鍊嬬拋鎻掔瑎',
+    date: item.startsAtText || formatChineseDateTime(date),
+    month,
+    day,
+    place: item.place,
+    capacity: item.capacity,
+    booked: item.booked,
+    description: item.description,
+  }
+}
+
+function formatChineseDateTime(date: Date) {
+  if (Number.isNaN(date.getTime())) {
+    return '閺冨爼妫垮鍛暰'
+  }
+  return date.toLocaleString('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).replaceAll('/', '-')
+}
+
+function mapTeam(item: any): TeamView {
+  const leader = item.leader || {}
+  const contact = leader.wechat && leader.wechat !== '閸欏苯鎮滅涵顔款吇閸撳秹娈ｉ挊?
+    ? `瀵邦喕淇婇敍?{leader.wechat}`
+    : leader.phone && leader.phone !== '閸欏苯鎮滅涵顔款吇閸撳秹娈ｉ挊?
+      ? `閹靛婧€閸欏嚖绱?{leader.phone}`
+      : '閸欏苯鎮滅涵顔款吇閸撳秹娈ｉ挊?
+  const applications = (item.applications || []).map((entry: any) => {
+    const application = entry.application || {}
+    const profile = entry.applicantProfile || {}
+    const skills = profile.skills || []
+    return {
+      id: application.id,
+      teamId: item.id,
+      leaderId: leader.id,
+      teamTitle: item.title,
+      applicant: profile.maskedName || application.applicantNickname || `閻劍鍩?${application.applicantId}`,
+      applicantId: application.applicantId,
+      skills,
+      skillsText: skills.join('閵?) || '閺嗗倹妫ら弽鍥╊劮',
+      rawStatus: application.status,
+      status: statusLabel(application.status),
+    }
+  })
+  const members = (item.members || []).map((member: any) => {
+    const skills = member.skills || []
+    return {
+      teamId: item.id,
+      leaderId: leader.id,
+      teamTitle: item.title,
+      userId: member.userId,
+      member: member.maskedName || member.nickname || `閻劍鍩?${member.userId}`,
+      rawRole: member.role,
+      role: member.role === 'LEADER' ? '闃熼暱' : '闂冪喎鎲?,
+      skills,
+      skillsText: skills.join('閵?) || '閺嗗倹妫ら弽鍥╊劮',
+    }
+  })
+  const pendingApplication = applications.find((application: TeamApplicationView) => application.rawStatus === 'PENDING')
+  const anyApplication = applications.find((application: TeamApplicationView) => application.rawStatus === 'PENDING' || application.rawStatus === 'APPROVED')
+  return {
+    id: item.id,
+    leaderId: leader.id,
+    contest: item.contest,
+    title: item.title,
+    need: item.need,
+    skills: item.skills || [],
+    status: statusLabel(item.status),
+    contact,
+    applied: !!anyApplication,
+    unlocked: contact !== '閸欏苯鎮滅涵顔款吇閸撳秹娈ｉ挊?,
+    applicationId: pendingApplication?.id,
+    applications,
+    members,
+  }
+}
+
+function mapTeamApplication(item: any): TeamApplicationView {
+  const application = item.application || {}
+  const team = item.team || {}
+  const profile = item.applicantProfile || {}
+  const leaderId = team.leaderId || item.leaderId || 0
+  const skills = profile.skills || []
+  return {
+    id: application.id,
+    teamId: application.teamId || team.id,
+    leaderId,
+    teamTitle: team.title || item.teamTitle || '閺堫亞鐓￠槦浼?,
+    applicant: profile.maskedName || application.applicantNickname || `閻劍鍩?${application.applicantId}`,
+    applicantId: application.applicantId,
+    skills,
+    skillsText: skills.join('閵?) || '閺嗗倹妫ら弽鍥╊劮',
+    rawStatus: application.status,
+    status: statusLabel(application.status),
+  }
+}
+
+function mapTeamMemberRecord(item: any): TeamMemberView {
+  const team = item.team || {}
+  const member = item.member || {}
+  const skills = member.skills || []
+  return {
+    teamId: team.id || member.teamId,
+    leaderId: team.leaderId || item.leaderId || 0,
+    teamTitle: team.title || item.teamTitle || '閺堫亞鐓￠槦浼?,
+    userId: member.userId,
+    member: member.maskedName || member.nickname || `閻劍鍩?${member.userId}`,
+    rawRole: member.role,
+    role: member.role === 'LEADER' ? '闃熼暱' : '闂冪喎鎲?,
+    skills,
+    skillsText: skills.join('閵?) || '閺嗗倹妫ら弽鍥╊劮',
+  }
+}
+
+function statusLabel(status: string) {
+  return ({ APPROVED: '瀹告煡鈧俺绻?, PENDING: '瀵板懎顓搁弽?, REJECTED: '瀹告煡鈹忛崶? } as Record<string, string>)[status] || status
+}
+
+function typeLabel(type: string) {
+  return ({ resource: '璧勬簮', blog: '鍗氬', salon: '娌欓緳', team: '缁勯槦' } as Record<string, string>)[type] || type
+}
+
+async function downloadResource(resource: ResourceView) {
+  try {
+    const result = await api<{ downloadCount: number }>(`/resources/${resource.id}/download`, { method: 'POST' })
+    resource.downloads = result.downloadCount
+    await loadHotResources()
+    ElMessage.success(`瀹歌尙鏁撻幋鎰┾偓?{resource.title}閵嗗秴鐣ㄩ崗銊ょ瑓鏉炰粙鎽奸幒銉礉楠炴儼顔囪ぐ鏇氱瑓鏉炶姤妫╄箛姊?
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '涓嬭浇婢惰精瑙?)
+  }
+}
+
+function canManageResource(resource: ResourceView) {
+  return selectedRole.value === 'admin' || resource.uploaderId === currentUser.value.id
+}
+
+function openResourceEditor(resource: ResourceView) {
+  resourceEditor.id = resource.id
+  resourceEditor.title = resource.title
+  resourceEditor.contest = resource.contest
+  resourceEditor.type = resource.type
+  resourceEditor.summary = resource.summary
+  resourceEditorVisible.value = true
+}
+
+async function saveResourceEdit() {
+  if (!resourceEditor.id) return
+  try {
+    await api(`/resources/${resourceEditor.id}`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        title: resourceEditor.title,
+        contest: resourceEditor.contest,
+        type: resourceEditor.type,
+        summary: resourceEditor.summary,
+      }),
+    })
+    resourceEditorVisible.value = false
+    await loadResources()
+    ElMessage.success('璧勬簮娣団剝浼呭鍙夋纯閺?)
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '缂栬緫璧勬簮婢惰精瑙﹂妴鍌涘絹缁€鐚寸窗閸欘亣鍏樼鐞嗛懛顏勭箒娑撳﹣绱堕惃鍕カ濠?)
+  }
+}
+
+async function deleteResource(resource: ResourceView) {
+  try {
+    await api(`/resources/${resource.id}`, { method: 'DELETE' })
+    await Promise.all([loadResources(), selectedRole.value === 'admin' ? loadAdmin() : Promise.resolve()])
+    ElMessage.success(`璧勬簮瀹告彃鍨归梽銈忕窗${resource.title}`)
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '鍒犻櫎璧勬簮婢惰精瑙﹂妴鍌涘絹缁€鐚寸窗閸欘亣鍏樼鐞嗛懛顏勭箒娑撳﹣绱堕惃鍕カ濠?)
+  }
+}
+
+async function deleteSelectedResources() {
+  if (selectedResourceIds.value.length === 0) return
+  try {
+    await confirmAction(`绾喖鐣剧憰浣瑰闁插繐鍨归梽銈夆偓澶夎厬閻?${selectedResourceIds.value.length} 妞ょ绁┃鎰偋閿涚剫)
+    await api('/resources/batch', {
+      method: 'DELETE',
+      body: JSON.stringify({ ids: selectedResourceIds.value }),
+    })
+    await Promise.all([loadResources(), selectedRole.value === 'admin' ? loadAdmin() : Promise.resolve()])
+    ElMessage.success('瀹稿弶澹掗柌蹇撳灩闂勩倝鈧鑵戦惃鍕カ濠?)
+  } catch (error) {
+    if (error !== 'cancel') {
+      ElMessage.error(error instanceof Error ? error.message : '閹靛綊鍣哄垹闄よ祫婧愭径杈Е')
+    }
+  }
+}
+
+function changeResourcePage(page: number) {
+  resourcePage.current = page
+  void loadResources()
+}
+
+function changeResourceSize(size: number) {
+  resourcePage.size = size
+  resourcePage.current = 1
+  void loadResources()
+}
+
+function changeBlogPage(page: number) {
+  blogPage.current = page
+  void loadBlogs()
+}
+
+function changeBlogSize(size: number) {
+  blogPage.size = size
+  blogPage.current = 1
+  void loadBlogs()
+}
+
+function changeSalonPage(page: number) {
+  salonPage.current = page
+  void loadSalons()
+}
+
+function changeSalonSize(size: number) {
+  salonPage.size = size
+  salonPage.current = 1
+  void loadSalons()
+}
+
+function changeTeamPage(page: number) {
+  teamPage.current = page
+  void loadTeams()
+}
+
+function changeTeamSize(size: number) {
+  teamPage.size = size
+  teamPage.current = 1
+  void loadTeams()
+}
+
+function changeTeamApplicationPage(page: number) {
+  teamApplicationPage.current = page
+  void loadTeamApplications()
+}
+
+function changeTeamApplicationSize(size: number) {
+  teamApplicationPage.size = size
+  teamApplicationPage.current = 1
+  void loadTeamApplications()
+}
+
+function changeTeamMemberPage(page: number) {
+  teamMemberPage.current = page
+  void loadTeamMembers()
+}
+
+function changeTeamMemberSize(size: number) {
+  teamMemberPage.size = size
+  teamMemberPage.current = 1
+  void loadTeamMembers()
+}
+
+async function createDemoResource() {
+  try {
+    const suffix = new Date().toLocaleTimeString('zh-CN', { hour12: false })
+    await api('/resources', {
+      method: 'POST',
+      body: JSON.stringify({
+        title: `閽冩繃藟閺夘垰鍟块崚楦跨カ閺傛瑥瀵?${suffix}`,
+        contest: '閽冩繃藟閺?,
+        type: '缁犳纭剁捄顖滃殠',
+        summary: '閸栧懎鎯堥崺铏诡攨濡剝婢橀妴浣哥埗鐟?DP 妫版ê鐎烽妴浣界閸撳秵顥呴弻銉︾閸楁洖鎷版径宥囨磸瀵ら缚顔呴妴?,
+        fileKey: `demo/lanqiao-${Date.now()}.pdf`,
+      }),
+    })
+    await Promise.all([loadResources(), selectedRole.value === 'admin' ? loadAdmin() : Promise.resolve()])
+    ElMessage.success(selectedRole.value === 'admin' ? '璧勬簮瀹歌弓绗傛导鐘茶嫙鏉╂稑鍙嗚祫婧愬簱 : '璧勬簮瀹稿弶褰佹禍銈呮倵缁旑垽绱濈粵澶婄窡绠＄悊閸涙ê顓搁弽?)
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '娑撳﹣绱惰祫婧愭径杈Е')
+  }
+}
+
+function insertBlogImage() {
+  const imageUrl = draftBlog.imageUrl.trim() || '/system-map.png'
+  draftBlog.imageUrl = imageUrl
+  if (!draftBlog.content.includes(imageUrl)) {
+    draftBlog.content = `${draftBlog.content.trim()}\n\n![绔炶禌缁忛獙闁板秴娴榏(${imageUrl})`
+  }
+  ElMessage.success('閸ュ墽澧?Markdown 瀹稿弶褰冮崗銉︻劀閺?)
+}
+
+function resetDraftBlog() {
+  editingBlogId.value = null
+  blogEditorMode.value = 'markdown'
+  draftBlog.title = '閹存垹娈戦拑婵囁夐弶顖氼槵鐠ф稑顦查惄?
+  draftBlog.contestTag = '閽冩繃藟閺?
+  draftBlog.content = '## 鐠侇厾绮岄懞鍌氼殧\n\n- 閸撳秳琚遍崨銊ㄋ夌拠顓熺《閸滃本膩閺夌笚n- 娑擃參妫块崶娑樻噯閹稿绗撴０妯哄煕妫版n- 閺堚偓閸氬簼绔撮崨銊δ侀幏鐔荤婢跺秶娲廫n\n> 闁插秶鍋ｆ稉宥嗘Ц閸掑嘲绶辨径姘剧礉閼板本妲搁幎濠囨晩妫版ê褰夐幋鎰讲婢跺秶鏁ゆ總妤勭熅閵?
+  draftBlog.imageUrl = ''
+  draftBlog.visibility = 'public'
+  draftBlog.anonymous = false
+  draftBlog.commentsOpen = true
+}
+
+function canEditBlog(post: BlogView) {
+  return currentUser.value.role === 'admin' || post.authorId === currentUser.value.id
+}
+
+function openBlogEditor(post?: BlogView) {
+  if (post) {
+    editingBlogId.value = post.id
+    draftBlog.title = post.title
+    draftBlog.contestTag = post.contestTag || '缁忛獙閸掑棔闊?
+    draftBlog.content = post.content
+    draftBlog.imageUrl = ''
+    draftBlog.visibility = post.visibility
+    draftBlog.anonymous = post.anonymous
+    draftBlog.commentsOpen = post.commentsOpen
+  } else {
+    resetDraftBlog()
+  }
+  navigateTo('blogEditor')
+}
+
+async function openBlogDetail(post: BlogView) {
+  try {
+    const data = await api<any>(`/blogs/${post.id}`)
+    activeBlog.value = mapBlog(data)
+    navigateTo('blogDetail')
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '閸旂姾娴囧崥瀹㈢拠锔藉剰婢惰精瑙?)
+  }
+}
+
+async function publishBlog() {
+  try {
+    const imageUrl = draftBlog.imageUrl.trim()
+    const content = imageUrl && !draftBlog.content.includes(imageUrl)
+      ? `${draftBlog.content.trim()}\n\n![绔炶禌缁忛獙闁板秴娴榏(${imageUrl})`
+      : draftBlog.content
+    const path = editingBlogId.value ? `/blogs/${editingBlogId.value}` : '/blogs'
+    await api(path, {
+      method: editingBlogId.value ? 'PUT' : 'POST',
+      body: JSON.stringify({
+        title: draftBlog.title,
+        content,
+        contestTag: draftBlog.contestTag,
+        anonymous: draftBlog.anonymous,
+        visibility: draftBlog.visibility.toUpperCase(),
+        commentsOpen: draftBlog.commentsOpen,
+      }),
+    })
+    await Promise.all([loadBlogs(), selectedRole.value === 'admin' ? loadAdmin() : Promise.resolve()])
+    navigateTo('blog')
+    ElMessage.success(selectedRole.value === 'admin' ? '鍗氬瀹歌弓绻氱€涙ê鑻熸潻娑樺弳楠炲灝婧€' : '鍗氬瀹稿弶褰佹禍銈呮倵缁旑垽绱濈粵澶婄窡绠＄悊閸涙ê顓搁弽绋挎倵鏉╂稑鍙嗛獮鍨簚')
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '娣囨繂鐡ㄥ崥瀹㈡径杈Е')
+  }
+}
+
+async function deleteBlog(post: BlogView) {
+  try {
+    await confirmAction(`绾喖鐣剧憰浣稿灩闂勩倕宕ョ€诡潿鈧?{post.title}閵嗗鎮ч敍鐒?
+    await api(`/blogs/${post.id}`, { method: 'DELETE' })
+    if (activeBlog.value?.id === post.id) {
+      activeBlog.value = null
+      navigateTo('blog')
+    }
+    await Promise.all([loadBlogs(), loadOverview(), selectedRole.value === 'admin' ? loadAdmin() : Promise.resolve()])
+    ElMessage.success('鍗氬瀹告彃鍨归梽?)
+  } catch (error) {
+    if (error !== 'cancel') {
+      ElMessage.error(error instanceof Error ? error.message : '鍒犻櫎鍗氬婢惰精瑙?)
+    }
+  }
+}
+
+async function toggleBlogAction(type: 'LIKE' | 'COLLECT') {
+  if (!activeBlog.value) return
+  const pendingKey = type === 'LIKE' ? 'like' : 'collect'
+  if (socialPending[pendingKey]) return
+  socialPending[pendingKey] = true
+  try {
+    const data = await api<any>(`/blogs/${activeBlog.value.id}/actions`, {
+      method: 'POST',
+      body: JSON.stringify({ type }),
+    })
+    activeBlog.value.social = mapSocial(data.stats)
+    await Promise.all([loadBlogs(), loadCreatorStats()])
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '娴滄帒濮╂径杈Е')
+  } finally {
+    socialPending[pendingKey] = false
+  }
+}
+
+async function toggleFollowAuthor() {
+  if (!activeBlog.value || activeBlog.value.authorId === currentUser.value.id || socialPending.follow) return
+  socialPending.follow = true
+  try {
+    const data = await api<any>(`/blogs/${activeBlog.value.id}/follow-author`, { method: 'POST' })
+    activeBlog.value.social.followed = Boolean(data.active)
+    await loadCreatorStats()
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '鍏虫敞婢惰精瑙?)
+  } finally {
+    socialPending.follow = false
+  }
+}
+
+function mapSocial(source: any): BlogSocialView {
+  return {
+    likes: source?.likes || 0,
+    collects: source?.collects || 0,
+    liked: Boolean(source?.liked),
+    collected: Boolean(source?.collected),
+    followed: Boolean(source?.followed),
+  }
+}
+
+async function addComment(post: { id: number; comments: BlogComment[] }) {
+  const text = commentDrafts[post.id]?.trim()
+  if (!text) return
+  try {
+    await api(`/blogs/${post.id}/comments`, {
+      method: 'POST',
+      body: JSON.stringify({ content: text, anonymous: false }),
+    })
+    commentDrafts[post.id] = ''
+    await Promise.all([
+      loadBlogs(),
+      activeBlog.value?.id === post.id ? api<any>(`/blogs/${post.id}`).then((data) => { activeBlog.value = mapBlog(data) }) : Promise.resolve(),
+    ])
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '鐠囧嫯顔戞径杈Е')
+  }
+}
+
+function salonPercent(salon: { booked: number; capacity: number }) {
+  return Math.round((salon.booked / salon.capacity) * 100)
+}
+
+async function bookSalon(salon: { id: number; booked: number; capacity: number; title: string }) {
+  if (salon.booked >= salon.capacity || bookedSalonIds.value.includes(salon.id)) return
+  try {
+    await api(`/salons/${salon.id}/book`, { method: 'POST' })
+    await Promise.all([loadSalons(), loadBookings()])
+    ElMessage.success(`棰勭害閹存劕濮涢敍?{salon.title}閿涘苯鍤熺拠浣稿嚒閻㈢喐鍨氶崚棰侀嚋娴滆桨鑵戣箛鍍?
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '棰勭害婢惰精瑙?)
+  }
+}
+
+async function createDemoSalon() {
+  try {
+    const startsAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 16)
+    await api('/salons', {
+      method: 'POST',
+      body: JSON.stringify({
+        title: '娴ｅ骸鍕剧痪褏鐣诲▔鏇炲弳闂傘劎鍤庢稉瀣煓姒?,
+        description: '闂堛垹鎮滄径褌绔存径褌绨╅崥灞筋劅閿涘矁顔夌憴锝囩彽鐠ф稖鐭惧鍕┾偓浣稿煕妫版濡總蹇撴嫲缁勯槦缁忛獙閵?,
+        startsAt,
+        place: '閸掓稒鏌婂Δ?A204',
+        capacity: 36,
+      }),
+    })
+    await Promise.all([loadSalons(), selectedRole.value === 'admin' ? loadAdmin() : Promise.resolve()])
+    ElMessage.success(selectedRole.value === 'admin' ? '娌欓緳瀹告彃褰傜敮鍐ㄨ嫙鏉╂稑鍙嗘棩绋嬮惇瀣緲' : '娌欓緳瀹稿弶褰佹禍銈呮倵缁旑垽绱濈粵澶婄窡绠＄悊閸涙ê顓搁弽?)
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '鍙戝竷娌欓緳婢惰精瑙?)
+  }
+}
+
+async function publishTeam() {
+  try {
+    await api('/teams', {
+      method: 'POST',
+      body: JSON.stringify({
+        title: draftTeam.title,
+        contest: '閼奉亜鐣炬稊澶岀彽鐠?,
+        need: draftTeam.need,
+        skills: [...draftTeam.skills],
+      }),
+    })
+    await Promise.all([loadTeams(), loadTeamApplications(), selectedRole.value === 'admin' ? loadAdmin() : Promise.resolve()])
+    ElMessage.success(selectedRole.value === 'admin' ? '缁勯槦閸楋紕澧栧鎻掑絺鐢喛绱濋懕鏃傞兇閺傜懓绱℃妯款吇闅愯棌' : '缁勯槦閸楋紕澧栧鍙夊絹娴溿倕鎮楃粩顖ょ礉缁涘绶熺鐞嗛崨妯侯吀閺?)
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '鍙戝竷缁勯槦婢惰精瑙?)
+  }
+}
+
+async function applyTeam(team: TeamView) {
+  try {
+    const result: any = await api(`/teams/${team.id}/apply`, { method: 'POST' })
+    team.applied = true
+    team.applicationId = result.application?.id
+    teamStep.value = 1
+    await loadTeamApplications()
+    ElMessage.info('鐢宠瀹告彃褰傞柅浣碘偓鍌濐嚞閸掑洦宕查崚浼存Е闂€鎸庡灗绠＄悊閸涙闊╂禒钘夋倱閹板繐鎮楅敍宀冧粓缁粯鏌熷蹇斿娴兼俺袙闁?)
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '鐢宠婢惰精瑙?)
+  }
+}
+
+async function approveTeam(team: TeamView) {
+  if (!team.applicationId) return
+  try {
+    await api(`/teams/${team.id}/applications/${team.applicationId}/approve`, { method: 'POST' })
+    await Promise.all([loadTeams(), loadTeamApplications(), loadTeamMembers()])
+    teamStep.value = 3
+    ElMessage.success('闃熼暱瀹告彃鎮撻幇蹇ョ礉绯荤粺瀹告彃鎮滈崣灞炬煙鐟欙綁鏀ｉ懕鏃傞兇閺傜懓绱?)
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '鍚屾剰鐢宠婢惰精瑙﹂妴鍌涘絹缁€鐚寸窗闂団偓鐟曚線妲﹂梹鎸庡灗绠＄悊閸涙闊╂禒?)
+  }
+}
+
+async function approveTeamApplication(application: TeamApplicationView) {
+  try {
+    await api(`/teams/${application.teamId}/applications/${application.id}/approve`, { method: 'POST' })
+    await Promise.all([loadTeams(), loadTeamApplications(), loadTeamMembers()])
+    teamStep.value = 3
+    ElMessage.success('瀹告彃鎮撻幇蹇撳弳闂冪噦绱濋崣灞炬煙閼辨梻閮撮弬鐟扮础瀹歌尪袙闁?)
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '鍚屾剰閸忋儵妲︽径杈Е閵嗗倹褰佺粈鐚寸窗闂団偓鐟曚線妲﹂梹鎸庡灗绠＄悊閸涙闊╂禒?)
+  }
+}
+
+function selectManageableApplications(rows: TeamApplicationView[]) {
+  selectedManageableApplicationDeleteIds.value = rows.map((row) => row.id)
+  selectedManageableApplicationIds.value = rows
+    .filter((row) => row.rawStatus === 'PENDING')
+    .map((row) => row.id)
+}
+
+function selectAdminApplications(rows: TeamApplicationView[]) {
+  selectedAdminApplicationDeleteIds.value = rows.map((row) => row.id)
+  selectedAdminApplicationIds.value = rows
+    .filter((row) => row.rawStatus === 'PENDING')
+    .map((row) => row.id)
+}
+
+async function approveApplications(applicationIds: number[], scope: '闃熶紞鐢宠' | '鍚庡彴閸忋儵妲︾敵璇?) {
+  if (applicationIds.length === 0) return
+  try {
+    await confirmAction(`绾喖鐣剧憰浣瑰闁插繐鎮撻幇蹇涒偓澶夎厬閻?${applicationIds.length} 閺?{scope}閸氭绱礰)
+    await api('/teams/applications/batch-approve', {
+      method: 'POST',
+      body: JSON.stringify({ applicationIds }),
+    })
+    await Promise.all([loadTeams(), loadTeamApplications(), loadTeamMembers()])
+    selectedManageableApplicationIds.value = []
+    selectedManageableApplicationDeleteIds.value = []
+    selectedAdminApplicationIds.value = []
+    selectedAdminApplicationDeleteIds.value = []
+    teamStep.value = 3
+    ElMessage.success('瀹稿弶澹掗柌蹇撴倱閹板繐鍙嗛梼鐔烘暤鐠囧嚖绱濋崣灞炬煙閼辨梻閮撮弬鐟扮础瀹歌尪袙闁?)
+  } catch (error) {
+    if (error !== 'cancel') {
+      ElMessage.error(error instanceof Error ? error.message : '閹靛綊鍣哄悓鎰忛崗銉╂Е婢惰精瑙﹂妴鍌涘絹缁€鐚寸窗闂団偓鐟曚線妲﹂梹鎸庡灗绠＄悊閸涙闊╂禒?)
+    }
+  }
+}
+
+async function rejectApplications(applicationIds: number[], scope: '闃熶紞鐢宠' | '鍚庡彴閸忋儵妲︾敵璇?) {
+  if (applicationIds.length === 0) return
+  try {
+    await confirmAction(`绾喖鐣剧憰浣瑰闁插繑瀚嗙紒婵嬧偓澶夎厬閻?${applicationIds.length} 閺?{scope}閸氭绱礰)
+    await api('/teams/applications/batch-reject', {
+      method: 'POST',
+      body: JSON.stringify({ applicationIds }),
+    })
+    await Promise.all([loadTeams(), loadTeamApplications()])
+    selectedManageableApplicationIds.value = []
+    selectedAdminApplicationIds.value = []
+    ElMessage.success('瀹稿弶澹掗柌蹇斿珕缂佹繂鍙嗛梼鐔烘暤鐠?)
+  } catch (error) {
+    if (error !== 'cancel') {
+      ElMessage.error(error instanceof Error ? error.message : '閹靛綊鍣烘嫆缁濋崗銉╂Е婢惰精瑙﹂妴鍌涘絹缁€鐚寸窗闂団偓鐟曚線妲﹂梹鎸庡灗绠＄悊閸涙闊╂禒?)
+    }
+  }
+}
+
+async function approveSelectedManageableApplications() {
+  await approveApplications(selectedManageableApplicationIds.value, '闃熶紞鐢宠')
+}
+
+async function approveSelectedAdminApplications() {
+  await approveApplications(selectedAdminApplicationIds.value, '鍚庡彴閸忋儵妲︾敵璇?)
+}
+
+async function rejectSelectedManageableApplications() {
+  await rejectApplications(selectedManageableApplicationIds.value, '闃熶紞鐢宠')
+}
+
+async function rejectTeamApplication(application: TeamApplicationView) {
+  await rejectApplications([application.id], '闃熶紞鐢宠')
+}
+
+async function deleteApplications(applicationIds: number[], scope: '闃熶紞鐢宠' | '鍚庡彴閸忋儵妲︾敵璇?) {
+  if (applicationIds.length === 0) return
+  try {
+    await confirmAction(`绾喖鐣剧憰浣稿灩闂勩倝鈧鑵戦惃?${applicationIds.length} 閺?{scope}鐠佹澘缍嶉崥妤嬬吹鍒犻櫎閸氬氦顕氱敵璇锋稉宥勭窗閸愬秵妯夌粈鎭掆偓淇?
+    await api('/teams/applications/batch', {
+      method: 'DELETE',
+      body: JSON.stringify({ applicationIds }),
+    })
+    await Promise.all([loadTeams(), loadTeamApplications(), loadTeamMembers()])
+    selectedManageableApplicationIds.value = []
+    selectedManageableApplicationDeleteIds.value = []
+    selectedAdminApplicationIds.value = []
+    selectedAdminApplicationDeleteIds.value = []
+    ElMessage.success('瀹告彃鍨归梽銈呭弳闂冪喓鏁电拠鐤唶瑜?)
+  } catch (error) {
+    if (error !== 'cancel') {
+      ElMessage.error(error instanceof Error ? error.message : '鍒犻櫎閸忋儵妲︾敵璇风拋鏉跨秿婢惰精瑙﹂妴鍌涘絹缁€鐚寸窗闂団偓鐟曚線妲﹂梹鎸庡灗绠＄悊閸涙闊╂禒?)
+    }
+  }
+}
+
+async function deleteSelectedManageableApplications() {
+  await deleteApplications(selectedManageableApplicationDeleteIds.value, '闃熶紞鐢宠')
+}
+
+async function deleteSelectedAdminApplications() {
+  await deleteApplications(selectedAdminApplicationDeleteIds.value, '鍚庡彴閸忋儵妲︾敵璇?)
+}
+
+async function deleteTeamApplication(application: TeamApplicationView) {
+  await deleteApplications([application.id], '闃熶紞鐢宠')
+}
+
+async function removeTeamMember(member: TeamMemberView) {
+  try {
+    await api(`/teams/${member.teamId}/members/${member.userId}`, { method: 'DELETE' })
+    await Promise.all([loadTeams(), loadTeamMembers()])
+    ElMessage.success('瀹告彃鐨㈢拠銉╂Е閸涙些閸戞椽妲︽导?)
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '缁夎鍤梼鐔锋喅婢惰精瑙﹂妴鍌涘絹缁€鐚寸窗闂団偓鐟曚線妲﹂梹鎸庡灗绠＄悊閸涙闊╂禒?)
+  }
+}
+
+function openTeamEditor(team: TeamView) {
+  teamEditor.id = team.id
+  teamEditor.title = team.title
+  teamEditor.contest = team.contest
+  teamEditor.need = team.need
+  teamEditor.skills = [...team.skills]
+  teamEditorVisible.value = true
+}
+
+function canManageTeam(team: TeamView) {
+  return selectedRole.value === 'admin' || team.leaderId === currentUser.value.id
+}
+
+async function saveTeamEdit() {
+  if (!teamEditor.id) return
+  try {
+    await api(`/teams/${teamEditor.id}`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        title: teamEditor.title,
+        contest: teamEditor.contest,
+        need: teamEditor.need,
+        skills: [...teamEditor.skills],
+      }),
+    })
+    teamEditorVisible.value = false
+    await Promise.all([loadTeams(), loadTeamApplications(), loadTeamMembers()])
+    ElMessage.success('闃熶紞娣団剝浼呭鍙夋纯閺?)
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '娣囨繂鐡ㄩ槦浼嶆径杈Е閵嗗倹褰佺粈鐚寸窗闂団偓鐟曚線妲﹂梹鎸庡灗绠＄悊閸涙闊╂禒?)
+  }
+}
+
+async function deleteTeam(team: TeamView) {
+  try {
+    await api(`/teams/${team.id}`, { method: 'DELETE' })
+    await Promise.all([loadTeams(), loadTeamApplications(), loadTeamMembers()])
+    ElMessage.success('闃熶紞瀹告彃鍨归梽?)
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '鍒犻櫎闃熶紞婢惰精瑙﹂妴鍌涘絹缁€鐚寸窗闂団偓鐟曚線妲﹂梹鎸庡灗绠＄悊閸涙闊╂禒?)
+  }
+}
+
+async function cancelSalonAppointment(row: SalonAppointmentView) {
+  try {
+    await api(`/admin/salon-appointments/${row.id}/cancel`, { method: 'PATCH' })
+    await Promise.all([loadAdmin(), loadSalons(), loadBookings()])
+    ElMessage.success('瀹告彃褰囧☉鍫ｎ嚉棰勭害楠炲爼鍣撮弨鎯ф倳妫?)
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '鍙栨秷棰勭害婢惰精瑙?)
+  }
+}
+
+async function deleteSalonAppointment(row: SalonAppointmentView) {
+  try {
+    await api(`/admin/salon-appointments/${row.id}`, { method: 'DELETE' })
+    await loadAdmin()
+    ElMessage.success('棰勭害鐠佹澘缍嶅鎻掑灩闂?)
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '鍒犻櫎棰勭害鐠佹澘缍嶆径杈Е')
+  }
+}
+
+async function exportSalonAppointments() {
+  try {
+    const response = await fetch(`${API_BASE}/salon/appointments/export`, {
+      headers: {
+        ...(token.value ? { Authorization: `Bearer ${token.value}` } : {}),
+      },
+    })
+    if (!response.ok) {
+      if (response.status === 401) {
+        handleSessionExpired()
+        throw new Error('鐧诲綍瀹歌尪绻冮張鐕傜礉鐠囩兘鍣搁弬鎵瑜?)
+      }
+      const text = await response.text()
+      throw new Error(text || '鐎电厧鍤绾︽暟鎹径杈Е')
+    }
+    const blob = await response.blob()
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = `娌欓緳棰勭害鏁版嵁-${new Date().toISOString().slice(0, 10)}.xlsx`
+    document.body.appendChild(anchor)
+    anchor.click()
+    anchor.remove()
+    URL.revokeObjectURL(url)
+    ElMessage.success('棰勭害鏁版嵁瀹告彃顕遍崙?)
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '鐎电厧鍤绾︽暟鎹径杈Е')
+  }
+}
+
+async function reviewItem(row: ReviewView, status: 'APPROVED' | 'REJECTED') {
+  try {
+    await api(`/admin/reviews/${row.id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status }),
+    })
+    await Promise.all([loadAdmin(), loadResources(), loadBlogs(), loadSalons(), loadTeams()])
+    ElMessage.success(`瀹℃牳閻樿埖鈧礁鍑￠弴瀛樻煀娑撶尨绱?{statusLabel(status)}`)
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '瀹℃牳婢惰精瑙?)
+  }
+}
+
+function selectReviews(rows: ReviewView[]) {
+  selectedReviewIds.value = rows.map((row) => row.id)
+}
+
+async function deleteSelectedReviews() {
+  if (selectedReviewIds.value.length === 0) return
+  try {
+    await confirmAction(`绾喖鐣剧憰浣瑰闁插繐鍨归梽銈夆偓澶夎厬閻?${selectedReviewIds.value.length} 閺夆€愁吀閺嶆瓕顔囪ぐ鏇炴偋閿涚剫)
+    await api('/admin/reviews/batch-delete', {
+      method: 'POST',
+      body: JSON.stringify({ ids: selectedReviewIds.value }),
+    })
+    await loadAdmin()
+    ElMessage.success('瀹稿弶澹掗柌蹇撳灩闂勩倝鈧鑵戦惃鍕吀閺嶆瓕顔囪ぐ?)
+  } catch (error) {
+    if (error !== 'cancel') {
+      ElMessage.error(error instanceof Error ? error.message : '閹靛綊鍣哄垹闄ゅ鏍哥拋鏉跨秿婢惰精瑙?)
+    }
+  }
+}
+
+async function reviewSelected(status: 'APPROVED' | 'REJECTED') {
+  if (selectedReviewIds.value.length === 0) return
+  const action = status === 'APPROVED' ? '闁俺绻冨鏍? : '妞瑰啿娲栫敵璇?
+  try {
+    await confirmAction(`绾喖鐣剧憰浣瑰闁?{action}闁鑵戦惃?${selectedReviewIds.value.length} 閺壜ゎ唶瑜版洖鎮ч敍鐒?
+    await api('/admin/reviews/batch', {
+      method: 'PATCH',
+      body: JSON.stringify({ ids: selectedReviewIds.value, status }),
+    })
+    await Promise.all([loadAdmin(), loadResources(), loadBlogs(), loadSalons(), loadTeams()])
+    ElMessage.success(`瀹稿弶澹掗柌?{action}`)
+  } catch (error) {
+    if (error !== 'cancel') {
+      ElMessage.error(error instanceof Error ? error.message : `閹靛綊鍣?{action}婢惰精瑙)
+    }
+  }
+}
+
+function changeReviewPage(page: number) {
+  reviewPage.current = page
+  void loadAdmin()
+}
+
+async function acknowledgeFirstLogin() {
+  try {
+    await api('/auth/first-login-acknowledged', { method: 'POST' })
+    ElMessage.success('娆㈣繋浣跨敤绯荤粺')
+  } catch (error) {
+    ElMessage.error('鎿嶄綔澶辫触')
+  }
+  firstLoginDialogVisible.value = false
+}
+
+async function listUsers(role?: string) {
+  const query = role ? `?role=${role}` : ''
+  return api<any[]>(`/admin/super/users${query}`)
+}
+
+async function promoteAdmin(userId: number) {
+  await api(`/admin/super/users/${userId}/promote-admin`, { method: 'POST' })
+  await loadAdmin()
+  ElMessage.success('宸叉彁鍗囦负鐢ㄦ埛绠＄悊鍛?)
+}
+
+async function demoteAdmin(userId: number) {
+  await api(`/admin/super/users/${userId}/demote-admin`, { method: 'POST' })
+  await loadAdmin()
+  ElMessage.success('宸插彇娑堣鐢ㄦ埛鐨勭鐞嗗憳韬唤')
+}
+
+async function transferSuperAdmin(userId: number) {
+  try {
+    await confirmAction('纭畾瑕佽浆璁╄秴绾х鐞嗗憳鏉冮檺鍚楋紵杞鍚庢偍灏嗕笉鍐嶆槸瓒呯骇绠＄悊鍛樸€?)
+    await api(`/admin/super/users/${userId}/transfer`, { method: 'POST' })
+    await refreshAll()
+    ElMessage.success('瓒呯骇绠＄悊鍛樻潈闄愬凡杞')
+  } catch (error) {
+    if (error !== 'cancel') {
+      ElMessage.error(error instanceof Error ? error.message : '杞澶辫触')
+    }
+  }
+}
+
+onMounted(() => {
+  if (window.location.pathname === '/login' && !isLoggedIn.value) {
+    window.history.replaceState({ view: 'login' }, '', '/login')
+    window.addEventListener('popstate', syncViewFromLocation)
+    return
+  }
+  syncViewFromLocation()
+  window.history.replaceState({ view: activeView.value }, '', routeByView[activeView.value])
+  window.addEventListener('popstate', syncViewFromLocation)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('popstate', spopstate', syncViewFromLocation)
+})
+
+</script>
