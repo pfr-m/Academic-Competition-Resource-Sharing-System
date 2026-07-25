@@ -114,7 +114,7 @@ public class BlogController {
                 .anonymous(request.anonymous())
                 .visibility(request.visibility().name())
                 .commentsOpen(request.commentsOpen())
-                .status(principal.role() == Role.ADMIN || principal.role() == Role.SUPER_ADMIN ? "APPROVED" : "PENDING")
+                .status("PENDING")
                 .build();
         Blog saved = blogService.createBlog(blog);
         reviewService.createReview("blog", saved.getId(), saved.getTitle(), principal.id());

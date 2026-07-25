@@ -1102,6 +1102,16 @@ textarea {
   font-size: 14px;
 }
 
+.native-file-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border: 1px solid #dcdfe6;
+  border-radius: 6px;
+  background: #fff;
+  color: #303133;
+}
+
 .md-uploading {
   display: flex;
   align-items: center;

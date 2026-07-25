@@ -7,7 +7,6 @@ import com.competition.hub.entity.SalonAppointment;
 import com.competition.hub.service.ReviewService;
 import com.competition.hub.service.SalonService;
 import com.competition.hub.service.UserService;
-import com.competition.hub.store.DomainModels.Role;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
@@ -51,7 +50,7 @@ public class SalonController {
         return PageResponse.from(result, records);
     }
 
-    @PreAuthorize("hasAnyRole('MENTOR','ADMIN','SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('STUDENT','MENTOR','ADMIN','SUPER_ADMIN')")
     @PostMapping
     public Salon create(@AuthenticationPrincipal AuthPrincipal principal, @Valid @RequestBody CreateSalonRequest request) {
         Salon salon = Salon.builder()
@@ -62,7 +61,7 @@ public class SalonController {
                 .startsAt(parseStartsAt(request.startsAt()))
                 .place(request.place())
                 .capacity(request.capacity())
-                .status(principal.role() == Role.ADMIN || principal.role() == Role.SUPER_ADMIN ? "APPROVED" : "PENDING")
+                .status("PENDING")
                 .build();
         Salon saved = salonService.createSalon(salon);
         reviewService.createReview("salon", saved.getId(), saved.getTitle(), principal.id());

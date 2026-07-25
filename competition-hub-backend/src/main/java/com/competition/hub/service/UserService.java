@@ -32,7 +32,7 @@ public interface UserService extends IService<User> {
 
     void setAdmin(Long userId);
 
-    User createOrPromoteAdmin(String studentNo, String nickname, String email, String passwordHash);
+    User promoteExistingAdmin(String studentNo, String username);
 
     void removeAdmin(Long userId);
 

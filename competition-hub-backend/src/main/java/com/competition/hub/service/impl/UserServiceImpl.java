@@ -179,56 +179,22 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
 
     @Override
     @Transactional
-    public User createOrPromoteAdmin(String studentNo, String nickname, String email, String passwordHash) {
-        Optional<User> existing = findByStudentNo(studentNo);
-        if (existing.isPresent()) {
-            User user = existing.get();
-            findByEmail(email)
-                    .filter(owner -> !owner.getId().equals(user.getId()))
-                    .ifPresent(owner -> {
-                        throw new ResponseStatusException(HttpStatus.CONFLICT, "邮箱已被其他账号使用");
-                    });
-            if ("SUPER_ADMIN".equals(user.getRole())) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "超级管理员无需重复设置");
-            }
-            if (!"STUDENT".equals(user.getRole()) && !"ADMIN".equals(user.getRole())) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "仅支持将普通学生账号设置为管理员");
-            }
-            user.setRole("ADMIN");
-            user.setNickname(nickname);
-            user.setRealName(nickname);
-            user.setEmail(email);
-            user.setFirstLoginPrompted(0);
-            user.setUpdatedAt(LocalDateTime.now());
-            updateById(user);
-            return user;
+    public User promoteExistingAdmin(String studentNo, String username) {
+        User user = findByStudentNo(studentNo)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "学号对应的用户不存在"));
+        if (!username.equals(user.getUsername())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "学号和用户名与数据库记录不一致");
         }
-
-        if (findByUsername(studentNo).isPresent() || findByEmail(email).isPresent()) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "账号或邮箱已被注册");
+        if ("SUPER_ADMIN".equals(user.getRole())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "超级管理员无需重复设置");
         }
-        LocalDateTime now = LocalDateTime.now();
-        User user = User.builder()
-                .studentNo(studentNo)
-                .username(studentNo)
-                .passwordHash(passwordHash)
-                .realName(nickname)
-                .nickname(nickname)
-                .phone("")
-                .email(email)
-                .wechat("")
-                .skills("[]")
-                .badges("[]")
-                .role("ADMIN")
-                .realNameVisibility("PUBLIC")
-                .phoneVisibility("HIDDEN")
-                .wechatVisibility("TEAM_ONLY")
-                .firstLoginPrompted(0)
-                .createdAt(now)
-                .updatedAt(now)
-                .deleted(0)
-                .build();
-        save(user);
+        if (!"STUDENT".equals(user.getRole()) && !"ADMIN".equals(user.getRole())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "仅支持将普通学生账号设置为管理员");
+        }
+        user.setRole("ADMIN");
+        user.setFirstLoginPrompted(0);
+        user.setUpdatedAt(LocalDateTime.now());
+        updateById(user);
         return user;
     }
 

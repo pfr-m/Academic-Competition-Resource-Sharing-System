@@ -18,6 +18,11 @@ yarn-error.log*
 .vscode/
 .DS_Store
 Thumbs.db
+.omo/
+~$*
+*.tmp
+*.corrupted
+*.corrupted-backup
 
 # Runtime uploads and temporary files
 uploads/

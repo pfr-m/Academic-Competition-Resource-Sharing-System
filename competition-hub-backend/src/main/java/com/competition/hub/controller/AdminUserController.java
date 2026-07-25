@@ -6,11 +6,9 @@ import com.competition.hub.service.UserService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Pattern;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -30,11 +28,9 @@ import java.util.Map;
 @PreAuthorize("hasRole('SUPER_ADMIN')")
 public class AdminUserController {
     private final UserService userService;
-    private final PasswordEncoder passwordEncoder;
 
-    public AdminUserController(UserService userService, PasswordEncoder passwordEncoder) {
+    public AdminUserController(UserService userService) {
         this.userService = userService;
-        this.passwordEncoder = passwordEncoder;
     }
 
     @GetMapping
@@ -51,11 +47,9 @@ public class AdminUserController {
 
     @PostMapping
     public Map<String, Object> createAdmin(@Valid @RequestBody AdminUserRequest request) {
-        User user = userService.createOrPromoteAdmin(
+        User user = userService.promoteExistingAdmin(
                 request.studentNo().trim(),
-                request.nickname().trim(),
-                request.email().trim(),
-                passwordEncoder.encode(request.password().trim())
+                request.username().trim()
         );
         return presentAdmin(user);
     }
@@ -109,9 +103,7 @@ public class AdminUserController {
 
     public record AdminUserRequest(
             @NotBlank String studentNo,
-            @NotBlank String nickname,
-            @NotBlank @Email String email,
-            @NotBlank @Pattern(regexp = "^(?=.*[A-Za-z])(?=.*\\d)[A-Za-z\\d]{6,18}$", message = "密码需为 6-18 位字母与数字组合") String password
+            @NotBlank String username
     ) {
     }
 

@@ -130,6 +130,10 @@
           <el-icon><Setting /></el-icon>
           <span>审核与管理后台</span>
         </el-menu-item>
+        <el-menu-item v-if="isContentAdmin" index="userManagement">
+          <el-icon><User /></el-icon>
+          <span>用户管理</span>
+        </el-menu-item>
         <el-menu-item v-if="isSuperAdmin" index="superAdmin">
           <el-icon><UserFilled /></el-icon>
           <span>管理员权限管理</span>
@@ -240,7 +244,7 @@
             <el-select v-model="resourceType" placeholder="资料类型" clearable>
               <el-option v-for="type in resourceTypes" :key="type" :label="type" :value="type" />
             </el-select>
-            <el-button type="primary" :icon="Upload" :disabled="currentUser.role === 'student'" @click="createDemoResource">上传资源</el-button>
+            <el-button type="primary" :icon="Upload" @click="openResourceDialog">上传资源</el-button>
             <el-button v-if="isContentAdmin" type="danger" plain :disabled="selectedResourceIds.length === 0" @click="deleteSelectedResources">批量删除</el-button>
           </div>
 
@@ -490,12 +494,13 @@
             </div>
             <el-alert v-else title="作者已关闭评论区" type="info" :closable="false" />
           </section>
+
         </section>
 
         <section v-if="activeView === 'salon'" class="view">
           <div class="toolbar">
-            <el-alert title="沙龙面向全校师生，学长学姐发布沙龙，学生预约成功后在个人中心查看凭证。" type="success" :closable="false" />
-            <el-button type="primary" :icon="Plus" :disabled="currentUser.role === 'student'" @click="createDemoSalon">发布沙龙</el-button>
+            <el-alert title="沙龙面向全校师生，所有用户均可提交沙龙，管理员审核通过后开放预约。" type="success" :closable="false" />
+            <el-button type="primary" :icon="Plus" @click="openSalonDialog">发布沙龙</el-button>
           </div>
           <div class="salon-grid">
             <article v-for="salon in salons" :key="salon.id" class="salon-card">
@@ -707,8 +712,9 @@
                   <span>{{ ticket.date }} · {{ ticket.place }}</span>
                   <el-tag type="success">凭证码{{ ticket.certificateCode }}</el-tag>
                 </div>
-              </div>
-            </section>
+          </div>
+
+        </section>
           </div>
           <el-dialog v-model="passwordDialogVisible" title="修改登录密码" width="460px">
             <el-form label-position="top" @submit.prevent>
@@ -820,6 +826,53 @@
           </section>
         </section>
 
+
+
+        <section v-if="activeView === 'userManagement'" class="view">
+          <div class="toolbar user-management-toolbar">
+            <el-input v-model="managedUserKeyword" placeholder="搜索学号、账号、昵称、邮箱或手机号" clearable @keyup.enter="loadManagedUsers">
+              <template #prefix><el-icon><Search /></el-icon></template>
+            </el-input>
+            <el-select v-model="managedUserRole" placeholder="用户角色" clearable>
+              <el-option label="普通学生" value="STUDENT" />
+              <el-option label="特邀专家" value="MENTOR" />
+              <el-option label="管理员" value="ADMIN" />
+              <el-option label="超级管理员" value="SUPER_ADMIN" />
+            </el-select>
+            <el-button type="primary" :icon="Search" @click="loadManagedUsers">查询</el-button>
+            <el-button type="danger" plain :disabled="managedUserSelection.length === 0" @click="deleteSelectedManagedUsers">
+              批量删除 ({{ managedUserSelection.length }})
+            </el-button>
+          </div>
+          <section class="panel">
+            <div class="panel-head">
+              <h3>用户列表</h3>
+              <el-tag type="success">{{ managedUserPage.total }} 位用户</el-tag>
+            </div>
+            <el-table :data="managedUsers" v-loading="managedUsersLoading" stripe style="width: 100%" @selection-change="handleManagedUserSelectionChange">
+              <el-table-column type="selection" width="55" :selectable="canDeleteManagedUser" />
+              <el-table-column prop="id" label="ID" width="80" />
+              <el-table-column prop="studentNo" label="学号/工号" width="150" />
+              <el-table-column prop="username" label="账号" width="140" />
+              <el-table-column prop="nickname" label="昵称" min-width="150" />
+              <el-table-column prop="email" label="邮箱" min-width="190" />
+              <el-table-column prop="phone" label="手机号" min-width="140" />
+              <el-table-column prop="createdAt" label="注册时间" width="180" />
+              <el-table-column label="角色" width="130">
+                <template #default="{ row }">
+                  <el-tag :type="managedUserRoleTag(row.role)">{{ managedUserRoleLabel(row.role) }}</el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column label="操作" width="130" fixed="right">
+                <template #default="{ row }">
+                  <el-button size="small" type="danger" plain :disabled="!canDeleteManagedUser(row)" @click.stop="deleteManagedUser(row)">删除</el-button>
+                </template>
+              </el-table-column>
+            </el-table>
+            <el-pagination class="pager" background layout="total, sizes, prev, pager, next" :current-page="managedUserPage.current" :page-size="managedUserPage.size" :page-sizes="[8, 10, 20, 50]" :total="managedUserPage.total" @current-change="changeManagedUserPage" @size-change="changeManagedUserSize" />
+          </section>
+        </section>
+
         <section v-if="activeView === 'superAdmin'" class="view">
           <el-alert title="管理员权限管理：可以查看所有管理员账号，添加新管理员，或取消管理员权限。注意：超级管理员不能删除自己。" type="warning" :closable="false" />
           <div class="toolbar">
@@ -854,14 +907,8 @@
               <el-form-item label="学号/工号">
                 <el-input v-model="newAdminForm.studentNo" placeholder="请输入学号或工号" />
               </el-form-item>
-              <el-form-item label="昵称">
-                <el-input v-model="newAdminForm.nickname" placeholder="请输入显示名称" />
-              </el-form-item>
-              <el-form-item label="邮箱">
-                <el-input v-model="newAdminForm.email" placeholder="请输入邮箱" />
-              </el-form-item>
-              <el-form-item label="密码">
-                <el-input v-model="newAdminForm.password" type="password" show-password placeholder="6-18 位字母与数字组合" />
+              <el-form-item label="用户名">
+                <el-input v-model="newAdminForm.username" placeholder="请输入数据库中的用户名" />
               </el-form-item>
             </el-form>
             <template #footer>
@@ -870,6 +917,59 @@
             </template>
           </el-dialog>
         </section>
+
+        <el-dialog v-model="resourceDialogVisible" title="上传资源" width="560px">
+          <el-form label-position="top">
+            <el-form-item label="资源标题">
+              <el-input v-model="resourceForm.title" placeholder="请输入资源标题" />
+            </el-form-item>
+            <el-form-item label="竞赛名称">
+              <el-select v-model="resourceForm.contest" filterable allow-create default-first-option placeholder="请选择或输入竞赛名称" style="width: 100%">
+                <el-option v-for="name in contests" :key="name" :label="name" :value="name" />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="资料类型">
+              <el-select v-model="resourceForm.type" filterable allow-create default-first-option placeholder="请选择或输入资料类型" style="width: 100%">
+                <el-option v-for="type in resourceTypes" :key="type" :label="type" :value="type" />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="资料说明">
+              <el-input v-model="resourceForm.summary" type="textarea" :rows="4" placeholder="请输入资料简介、适用人群或使用说明" />
+            </el-form-item>
+            <el-form-item label="选择文件">
+              <input class="native-file-input" type="file" @change="handleResourceFileChange" />
+              <div class="form-tip">{{ resourceFile ? resourceFile.name : '请选择要上传的资料文件' }}</div>
+            </el-form-item>
+          </el-form>
+          <template #footer>
+            <el-button @click="resourceDialogVisible = false">取消</el-button>
+            <el-button type="primary" @click="submitResource">提交审核</el-button>
+          </template>
+        </el-dialog>
+
+        <el-dialog v-model="salonDialogVisible" title="发布沙龙" width="560px">
+          <el-form label-position="top">
+            <el-form-item label="沙龙标题">
+              <el-input v-model="salonForm.title" placeholder="请输入沙龙标题" />
+            </el-form-item>
+            <el-form-item label="沙龙介绍">
+              <el-input v-model="salonForm.description" type="textarea" :rows="4" placeholder="请输入分享内容、适合人群或活动亮点" />
+            </el-form-item>
+            <el-form-item label="开始时间">
+              <el-date-picker v-model="salonForm.startsAt" type="datetime" value-format="YYYY-MM-DDTHH:mm" format="YYYY-MM-DD HH:mm" placeholder="选择开始时间" style="width: 100%" />
+            </el-form-item>
+            <el-form-item label="地点">
+              <el-input v-model="salonForm.place" placeholder="请输入地点" />
+            </el-form-item>
+            <el-form-item label="容量">
+              <el-input-number v-model="salonForm.capacity" :min="1" :max="500" style="width: 100%" />
+            </el-form-item>
+          </el-form>
+          <template #footer>
+            <el-button @click="salonDialogVisible = false">取消</el-button>
+            <el-button type="primary" @click="submitSalon">提交审核</el-button>
+          </template>
+        </el-dialog>
       </el-main>
     </el-container>
   </el-container>
@@ -920,6 +1020,7 @@ type TeamMemberView = { teamId: number; leaderId: number; teamTitle: string; use
 type ReviewView = { id: number; type: string; targetType?: string; targetId?: number; title: string; owner: string; status: string }
 type CandidateView = { id: number; maskedName: string; grade: string; intent: string; skills: string[] }
 type SalonAppointmentView = { id: number; salonTitle: string; userNickname: string; certificateCode: string; status: string; rawStatus: string }
+type ManagedUserView = { id: number; studentNo: string; username: string; nickname: string; email: string; phone: string; role: string; createdAt: string }
 
 const md = new MarkdownIt({
   html: true,
@@ -976,10 +1077,20 @@ const blogEditorMode = ref<'markdown' | 'text'>('markdown')
 const editingBlogId = ref<number | null>(null)
 const mdFileInputRef = ref<HTMLInputElement | null>(null)
 const mdUploading = ref(false)
+const resourceDialogVisible = ref(false)
+const resourceForm = reactive({ title: '', contest: '', type: '', summary: '' })
+const resourceFile = ref<File | null>(null)
 const adminUsers = ref<any[]>([])
 const adminUsersLoading = ref(false)
 const newAdminDialogVisible = ref(false)
-const newAdminForm = reactive({ studentNo: '', nickname: '', email: '', password: '' })
+const newAdminForm = reactive({ studentNo: '', username: '' })
+const salonDialogVisible = ref(false)
+const salonForm = reactive({ title: '', description: '', startsAt: '', place: '', capacity: 36 })
+const managedUsers = ref<ManagedUserView[]>([])
+const managedUsersLoading = ref(false)
+const managedUserKeyword = ref('')
+const managedUserRole = ref('')
+const managedUserSelection = ref<ManagedUserView[]>([])
 
 const users = {
   student: { id: 1, studentNo: '20230118', username: 'student', name: '陈同学', avatar: '陈', role: 'student', roleLabel: '普通学生' },
@@ -1023,6 +1134,7 @@ const resourcePage = reactive({ current: 1, size: 8, total: 0 })
 const blogPage = reactive({ current: 1, size: 6, total: 0 })
 const salonPage = reactive({ current: 1, size: 6, total: 0 })
 const reviewPage = reactive({ current: 1, size: 8, total: 0 })
+const managedUserPage = reactive({ current: 1, size: 10, total: 0 })
 const teamPage = reactive({ current: 1, size: 6, total: 0 })
 const teamApplicationPage = reactive({ current: 1, size: 8, total: 0 })
 const teamMemberPage = reactive({ current: 1, size: 8, total: 0 })
@@ -1044,6 +1156,7 @@ const viewTitle = computed(() => ({
   teams: '技术红娘组队',
   profile: '个人隐私中心',
   admin: '审核后台',
+  userManagement: '用户管理',
   superAdmin: '管理员权限管理',
 }[activeView.value]))
 
@@ -1344,6 +1457,7 @@ async function refreshAll() {
   await Promise.all([
     loadOverview(), loadCreatorStats(), loadResources(), loadHotResources(), loadBlogs(), loadSalons(), loadBookings(), loadTeams(),
     isContentAdmin.value ? loadAdmin() : Promise.resolve(),
+    isContentAdmin.value ? loadManagedUsers() : Promise.resolve(),
     isSuperAdmin.value ? loadAdminUsers() : Promise.resolve(),
   ])
 }
@@ -1351,7 +1465,7 @@ async function refreshAll() {
 const routeByView: Record<string, string> = {
   dashboard: '/', resources: '/resources', blog: '/blogs', blogEditor: '/blogs/editor',
   blogDetail: '/blogs/detail', salon: '/salons', teams: '/teams', profile: '/profile',
-  admin: '/admin', superAdmin: '/admin/permissions',
+  admin: '/admin', userManagement: '/admin/user-management', superAdmin: '/admin/permissions',
 }
 const viewByRoute = Object.fromEntries(Object.entries(routeByView).map(([view, path]) => [path, view]))
 function viewFromLocation(pathname = window.location.pathname) {
@@ -1368,7 +1482,7 @@ function pathForView(view: string) {
 }
 function allowedView(view: string) {
   if (view === 'superAdmin') return isSuperAdmin.value
-  if (view === 'admin') return isContentAdmin.value
+  if (view === 'admin' || view === 'userManagement') return isContentAdmin.value
   return true
 }
 function navigateTo(view: string) {
@@ -1569,12 +1683,47 @@ function changeTeamApplicationSize(size: number) { teamApplicationPage.size = si
 function changeTeamMemberPage(page: number) { teamMemberPage.current = page; void loadTeamMembers() }
 function changeTeamMemberSize(size: number) { teamMemberPage.size = size; teamMemberPage.current = 1; void loadTeamMembers() }
 
-async function createDemoResource() {
+function openResourceDialog() {
+  const suffix = new Date().toLocaleTimeString('zh-CN', { hour12: false })
+  resourceForm.title = `蓝桥杯备赛资料${suffix}`
+  resourceForm.contest = resourceContest.value || '蓝桥杯'
+  resourceForm.type = resourceType.value || '学习笔记'
+  resourceForm.summary = '包含历年真题解析和算法模板，适合正在备考的同学参考。'
+  resourceFile.value = null
+  resourceDialogVisible.value = true
+}
+function handleResourceFileChange(event: Event) {
+  const input = event.target as HTMLInputElement
+  resourceFile.value = input.files?.[0] || null
+}
+async function submitResource() {
+  if (!resourceForm.title.trim() || !resourceForm.contest.trim() || !resourceForm.type.trim() || !resourceForm.summary.trim() || !resourceFile.value) {
+    ElMessage.warning('请填写完整的资源信息')
+    return
+  }
   try {
-    const suffix = new Date().toLocaleTimeString('zh-CN', { hour12: false })
-    await api('/resources', { method: 'POST', body: JSON.stringify({ title: `蓝桥杯备赛资料${suffix}`, contest: '蓝桥杯', type: '学习笔记', summary: '包含历年真题解析和 DP 算法模板，适合正在备考的同学参考。', fileKey: `demo/lanqiao-${Date.now()}.pdf` }) })
+    const formData = new FormData()
+    formData.append('title', resourceForm.title.trim())
+    formData.append('contest', resourceForm.contest.trim())
+    formData.append('type', resourceForm.type.trim())
+    formData.append('summary', resourceForm.summary.trim())
+    formData.append('file', resourceFile.value)
+    const response = await fetch(`${API_BASE}/resources/upload`, {
+      method: 'POST',
+      headers: token.value ? { Authorization: `Bearer ${token.value}` } : {},
+      body: formData,
+    })
+    if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        handleSessionExpired()
+        throw new Error('登录已过期，请重新登录')
+      }
+      throw new Error(await response.text() || '创建资源失败')
+    }
+    resourceDialogVisible.value = false
+    resourceFile.value = null
     await Promise.all([loadResources(), isContentAdmin.value ? loadAdmin() : Promise.resolve()])
-    ElMessage.success(isContentAdmin.value ? '资源已发布并进入审核队列，请刷新资源库' : '资源已提交审核，等待管理员审核')
+    ElMessage.success('资源已提交审核，等待管理员审核通过后公开')
   } catch (error) { ElMessage.error(error instanceof Error ? error.message : '创建资源失败') }
 }
 
@@ -1628,7 +1777,7 @@ async function publishBlog() {
     const path = editingBlogId.value ? `/blogs/${editingBlogId.value}` : '/blogs'
     await api(path, { method: editingBlogId.value ? 'PUT' : 'POST', body: JSON.stringify({ title: draftBlog.title, content, contestTag: draftBlog.contestTag, anonymous: draftBlog.anonymous, visibility: draftBlog.visibility.toUpperCase(), commentsOpen: draftBlog.commentsOpen }) })
     await Promise.all([loadBlogs(), isContentAdmin.value ? loadAdmin() : Promise.resolve()])
-    navigateTo('blog'); ElMessage.success(isContentAdmin.value ? '博客已发布并公开可见' : '博客已提交审核，等待管理员审核')
+    navigateTo('blog'); ElMessage.success('博客已提交审核，等待管理员审核通过后公开')
   } catch (error) { ElMessage.error(error instanceof Error ? error.message : '发布博客失败') }
 }
 async function deleteBlog(post: BlogView) {
@@ -1672,12 +1821,25 @@ async function addComment(post: { id: number; comments: BlogComment[] }) {
 }
 
 function salonPercent(salon: SalonView) { return Math.round(salon.booked / salon.capacity * 100) }
-async function createDemoSalon() {
+function openSalonDialog() {
+  const startsAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 16)
+  salonForm.title = '大三年级算法竞赛沙龙'
+  salonForm.description = '邀请同学分享竞赛路线与刷题规划经验。'
+  salonForm.startsAt = startsAt
+  salonForm.place = '教学楼 A204'
+  salonForm.capacity = 36
+  salonDialogVisible.value = true
+}
+async function submitSalon() {
+  if (!salonForm.title.trim() || !salonForm.description.trim() || !salonForm.startsAt || !salonForm.place.trim() || !salonForm.capacity) {
+    ElMessage.warning('请填写完整的沙龙信息')
+    return
+  }
   try {
-    const startsAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 16)
-    await api('/salons', { method: 'POST', body: JSON.stringify({ title: '大三年级算法竞赛沙龙', description: '邀请大一同学分享竞赛路线与刷题规划经验。', startsAt, place: '教学楼 A204', capacity: 36 }) })
+    await api('/salons', { method: 'POST', body: JSON.stringify({ ...salonForm }) })
+    salonDialogVisible.value = false
     await Promise.all([loadSalons(), isContentAdmin.value ? loadAdmin() : Promise.resolve()])
-    ElMessage.success(isContentAdmin.value ? '沙龙已发布，可在日程查看' : '沙龙已提交审核，等待管理员审核')
+    ElMessage.success('沙龙已提交审核，等待管理员审核通过后开放预约')
   } catch (error) { ElMessage.error(error instanceof Error ? error.message : '创建沙龙失败') }
 }
 async function bookSalon(salon: SalonView) {
@@ -1830,6 +1992,46 @@ async function transferSuperAdmin(userId: number) {
   } catch (error) { if (error !== 'cancel') ElMessage.error(error instanceof Error ? error.message : '转让失败') }
 }
 
+
+
+async function loadManagedUsers() {
+  if (!isContentAdmin.value) return
+  managedUsersLoading.value = true
+  try {
+    const query = queryString({ page: managedUserPage.current, size: managedUserPage.size, keyword: managedUserKeyword.value.trim(), role: managedUserRole.value })
+    const data = await api<any>(`/users/page?${query}`)
+    const records = Array.isArray(data) ? data : data.records
+    managedUserPage.total = Array.isArray(data) ? records.length : data.total
+    managedUserPage.current = Array.isArray(data) ? managedUserPage.current : data.current
+    managedUserPage.size = Array.isArray(data) ? managedUserPage.size : data.size
+    managedUserSelection.value = []
+    managedUsers.value = records.map(mapManagedUser)
+  } catch (error) { ElMessage.error(error instanceof Error ? error.message : '加载用户列表失败') }
+  finally { managedUsersLoading.value = false }
+}
+function mapManagedUser(item: any): ManagedUserView {
+  return { id: item.id, studentNo: item.studentNo || '-', username: item.username || '-', nickname: item.nickname || '-', email: item.email || '-', phone: item.phone || '-', role: item.role || 'STUDENT', createdAt: item.createdAt ? formatChineseDateTime(new Date(item.createdAt)) : '-' }
+}
+function handleManagedUserSelectionChange(rows: ManagedUserView[]) { managedUserSelection.value = rows }
+function canDeleteManagedUser(row: ManagedUserView) { return row.id !== currentUser.value.id && row.role !== 'ADMIN' && row.role !== 'SUPER_ADMIN' }
+function managedUserRoleLabel(role: string) { if (role === 'SUPER_ADMIN') return '超级管理员'; if (role === 'ADMIN') return '管理员'; if (role === 'MENTOR') return '特邀专家'; return '普通学生' }
+function managedUserRoleTag(role: string) { if (role === 'SUPER_ADMIN') return 'danger'; if (role === 'ADMIN') return 'warning'; if (role === 'MENTOR') return 'success'; return 'info' }
+async function deleteManagedUser(row: ManagedUserView) { await deleteManagedUsers([row.id], `确定要删除用户「${row.nickname || row.username}」吗？`) }
+async function deleteSelectedManagedUsers() { const ids = managedUserSelection.value.map(row => row.id); await deleteManagedUsers(ids, `此操作将永久删除选中的 ${ids.length} 位用户，是否继续？`, true) }
+async function deleteManagedUsers(ids: number[], message: string, batch = false) {
+  if (ids.length === 0) return
+  if (ids.includes(currentUser.value.id)) { ElMessage.warning('不能删除当前登录的账号！'); return }
+  try {
+    await confirmAction(message)
+    if (batch) await api('/users/batch', { method: 'DELETE', body: JSON.stringify(ids) })
+    else await api(`/users/${ids[0]}`, { method: 'DELETE' })
+    await loadManagedUsers()
+    ElMessage.success(batch ? '批量删除成功' : '用户已删除')
+  } catch (error) { if (error !== 'cancel') ElMessage.error(error instanceof Error ? error.message : '删除用户失败') }
+}
+function changeManagedUserPage(page: number) { managedUserPage.current = page; void loadManagedUsers() }
+function changeManagedUserSize(size: number) { managedUserPage.size = size; managedUserPage.current = 1; void loadManagedUsers() }
+
 async function loadAdminUsers() {
   adminUsersLoading.value = true
   try {
@@ -1837,9 +2039,9 @@ async function loadAdminUsers() {
   } catch (error) { ElMessage.error(error instanceof Error ? error.message : '加载管理员列表失败') }
   finally { adminUsersLoading.value = false }
 }
-function openNewAdminDialog() { newAdminForm.studentNo = ''; newAdminForm.nickname = ''; newAdminForm.email = ''; newAdminForm.password = ''; newAdminDialogVisible.value = true }
+function openNewAdminDialog() { newAdminForm.studentNo = ''; newAdminForm.username = ''; newAdminDialogVisible.value = true }
 async function createAdmin() {
-  if (!newAdminForm.studentNo || !newAdminForm.nickname || !newAdminForm.email || !newAdminForm.password) { ElMessage.warning('请填写所有必填项'); return }
+  if (!newAdminForm.studentNo || !newAdminForm.username) { ElMessage.warning('请填写学号和用户名'); return }
   try {
     await api('/admin/users', { method: 'POST', body: JSON.stringify(newAdminForm) }); newAdminDialogVisible.value = false; await loadAdminUsers(); ElMessage.success('管理员添加成功')
   } catch (error) { ElMessage.error(error instanceof Error ? error.message : '新增管理员失败') }

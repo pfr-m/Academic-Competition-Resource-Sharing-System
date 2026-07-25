@@ -87,7 +87,7 @@ public class ResourceController {
         return PageResponse.from(result, records);
     }
 
-    @PreAuthorize("hasAnyRole('MENTOR','ADMIN','SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('STUDENT','MENTOR','ADMIN','SUPER_ADMIN')")
     @PostMapping
     public Resource create(@AuthenticationPrincipal AuthPrincipal principal, @Valid @RequestBody CreateResourceRequest request) {
         Resource item = new Resource();
@@ -101,14 +101,14 @@ public class ResourceController {
         item.setOriginalFileName(request.fileKey());
         item.setFileSize(0L);
         item.setContentType("application/octet-stream");
-        item.setStatus(principal.role().name().equals("ADMIN") || principal.role().name().equals("SUPER_ADMIN") ? "APPROVED" : "PENDING");
+        item.setStatus("PENDING");
         Resource saved = resourceService.createResource(item);
         redisCacheService.evictContestResourceCache(saved.getContest());
         reviewService.createReview("resource", saved.getId(), saved.getTitle(), principal.id());
         return saved;
     }
 
-    @PreAuthorize("hasAnyRole('MENTOR','ADMIN','SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('STUDENT','MENTOR','ADMIN','SUPER_ADMIN')")
     @PostMapping(path = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public Resource upload(
             @AuthenticationPrincipal AuthPrincipal principal,
@@ -141,7 +141,7 @@ public class ResourceController {
         item.setOriginalFileName(originalName);
         item.setFileSize(file.getSize());
         item.setContentType(file.getContentType());
-        item.setStatus(principal.role().name().equals("ADMIN") || principal.role().name().equals("SUPER_ADMIN") ? "APPROVED" : "PENDING");
+        item.setStatus("PENDING");
         Resource saved = resourceService.createResource(item);
         redisCacheService.evictContestResourceCache(saved.getContest());
         reviewService.createReview("resource", saved.getId(), saved.getTitle(), principal.id());
