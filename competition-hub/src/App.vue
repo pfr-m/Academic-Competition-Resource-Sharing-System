@@ -244,7 +244,7 @@
             <el-select v-model="resourceType" placeholder="资料类型" clearable>
               <el-option v-for="type in resourceTypes" :key="type" :label="type" :value="type" />
             </el-select>
-            <el-button type="primary" :icon="Upload" @click="openResourceDialog">上传资源</el-button>
+            <el-button type="primary" :icon="Upload" @click="openResourceDialog">{{ isContentAdmin ? '发布资源' : '上传资源' }}</el-button>
             <el-button v-if="isContentAdmin" type="danger" plain :disabled="selectedResourceIds.length === 0" @click="deleteSelectedResources">批量删除</el-button>
           </div>
 
@@ -299,6 +299,10 @@
               </el-form-item>
               <el-form-item label="资料简介">
                 <el-input v-model="resourceEditor.summary" type="textarea" :rows="4" />
+              </el-form-item>
+              <el-form-item label="替换文件">
+                <input class="native-file-input" type="file" @change="handleResourceEditFileChange" />
+                <div class="form-tip">{{ resourceEditFile ? resourceEditFile.name : '不选择则保留原文件' }}</div>
               </el-form-item>
             </el-form>
             <template #footer>
@@ -375,7 +379,7 @@
               <div class="toolbar">
                 <el-radio-group v-model="blogEditorMode">
                   <el-radio-button label="markdown">Markdown</el-radio-button>
-                  <el-radio-button label="text">普通文本</el-radio-button>
+                  <el-radio-button label="text">普通文本（Word/PDF）</el-radio-button>
                 </el-radio-group>
                 <el-button @click="goBack">取消</el-button>
                 <el-button type="primary" :icon="EditPen" @click="publishBlog">{{ editingBlogId ? '保存修改' : '发布博客' }}</el-button>
@@ -384,7 +388,7 @@
                 <section class="panel editor-panel">
                   <div class="panel-head">
                     <h3>{{ editingBlogId ? '编辑经验' : '发布经验 / 个人笔记' }}</h3>
-                    <el-tag type="success">{{ blogEditorMode === 'markdown' ? 'Markdown' : '普通文本' }}</el-tag>
+                    <el-tag type="success">{{ blogEditorMode === 'markdown' ? 'Markdown' : '普通文本 / Word / PDF' }}</el-tag>
                   </div>
                   <el-form label-position="top">
                     <el-form-item label="标题">
@@ -400,12 +404,14 @@
                       <el-input v-model="draftBlog.content" type="textarea" :rows="20" />
                     </el-form-item>
                     <el-form-item v-if="blogEditorMode === 'markdown'" label="博客插图">
-                      <el-input v-model="draftBlog.imageUrl" placeholder="输入图片 URL，也可不填只显示文本">
-                        <template #append>
-                          <el-button @click="insertBlogImage">插入图片</el-button>
-                        </template>
-                      </el-input>
-                    </el-form-item>
+                    <el-input v-model="draftBlog.imageUrl" placeholder="输入图片 URL，也可不填只显示文本">
+                      <template #append>
+                        <el-button @click="insertBlogImage">插入图片</el-button>
+                      </template>
+                    </el-input>
+                    <input ref="blogImageInputRef" class="hidden-file-input" type="file" accept="image/*" @change="handleBlogImageUpload" />
+                    <el-button class="mt-2" plain :loading="blogImageUploading" @click="triggerBlogImageInput">上传本地图片</el-button>
+                  </el-form-item>
                     <div class="form-inline">
                       <el-radio-group v-model="draftBlog.visibility">
                         <el-radio-button label="public">公开广场</el-radio-button>
@@ -425,14 +431,14 @@
                 </section>
               </div>
             </el-tab-pane>
-            <el-tab-pane label="导入本地 MD" name="import">
+            <el-tab-pane label="导入本地文件" name="import">
               <div class="md-upload-container">
                 <div class="md-upload-card" @click="triggerMdFileInput" @dragover.prevent @drop.prevent="handleMdDrop">
                   <el-icon class="md-upload-icon"><Upload /></el-icon>
-                  <h3>点击或拖拽 .md 文件至此</h3>
-                  <p>文件将被解析为标题和 Markdown 内容，自动填充到编辑器</p>
+                  <h3>点击或拖拽博客文件至此</h3>
+                  <p>支持 .md、.txt、.docx、.pdf；Markdown 关联图片请和文章文件一起选择</p>
                   <el-button type="primary" plain @click.stop="triggerMdFileInput">选择文件</el-button>
-                  <input ref="mdFileInputRef" type="file" accept=".md" style="display:none" @change="handleMdFileChange" />
+                  <input ref="mdFileInputRef" type="file" accept=".md,.txt,.docx,.pdf,image/*" multiple style="display:none" @change="handleMdFileChange" />
                 </div>
                 <div v-if="mdUploading" class="md-uploading">
                   <el-icon class="is-loading"><Plus /></el-icon>
@@ -522,6 +528,7 @@
                   <el-button type="primary" :disabled="salon.booked >= salon.capacity || bookedSalonIds.includes(salon.id)" @click="bookSalon(salon)">
                     {{ bookedSalonIds.includes(salon.id) ? '已预约' : '立即预约' }}
                   </el-button>
+                  <el-button v-if="canManageSalon(salon)" type="danger" plain @click="deleteSalon(salon)">删除沙龙</el-button>
                 </div>
               </div>
             </article>
@@ -943,7 +950,7 @@
           </el-form>
           <template #footer>
             <el-button @click="resourceDialogVisible = false">取消</el-button>
-            <el-button type="primary" @click="submitResource">提交审核</el-button>
+            <el-button type="primary" @click="submitResource">{{ isContentAdmin ? '直接发布' : '提交审核' }}</el-button>
           </template>
         </el-dialog>
 
@@ -967,7 +974,7 @@
           </el-form>
           <template #footer>
             <el-button @click="salonDialogVisible = false">取消</el-button>
-            <el-button type="primary" @click="submitSalon">提交审核</el-button>
+            <el-button type="primary" @click="submitSalon">{{ isContentAdmin ? '直接发布' : '提交审核' }}</el-button>
           </template>
         </el-dialog>
       </el-main>
@@ -1012,7 +1019,7 @@ type BlogSocialView = { likes: number; collects: number; liked: boolean; collect
 type ResourceView = { id: number; uploaderId: number; contest: string; type: string; title: string; summary: string; downloads: number; uploader: string }
 type HotResourceView = { id: number; title: string; contest: string; type: string; downloads: number }
 type BlogView = { id: number; authorId: number; title: string; author: string; alias: string; cert: string; contestTag: string; anonymous: boolean; visibility: string; commentsOpen: boolean; content: string; createdAt: string; social: BlogSocialView; comments: BlogComment[] }
-type SalonView = { id: number; title: string; speaker: string; date: string; month: string; day: string; place: string; capacity: number; booked: number; description: string }
+type SalonView = { id: number; speakerId: number; title: string; speaker: string; date: string; month: string; day: string; place: string; capacity: number; booked: number; description: string }
 type TicketView = SalonView & { certificateCode: string }
 type TeamView = { id: number; leaderId: number; contest: string; title: string; need: string; skills: string[]; status: string; contact: string; applied: boolean; unlocked: boolean; applicationId?: number; applications: TeamApplicationView[]; members: TeamMemberView[] }
 type TeamApplicationView = { id: number; teamId: number; leaderId: number; teamTitle: string; applicant: string; applicantId: number; skills: string[]; skillsText: string; status: string; rawStatus: string }
@@ -1035,7 +1042,7 @@ const md = new MarkdownIt({
 })
 md.normalizeLink = (url: string) => url
 md.normalizeLinkText = (url: string) => url
-const API_BASE = 'http://127.0.0.1:8099/api'
+const API_BASE = '/api'
 const TOKEN_KEY = 'competition-hub-token'
 const ROLE_KEY = 'competition-hub-role'
 let sessionExpiredNotified = false
@@ -1076,10 +1083,13 @@ const blogEditorTab = ref('write')
 const blogEditorMode = ref<'markdown' | 'text'>('markdown')
 const editingBlogId = ref<number | null>(null)
 const mdFileInputRef = ref<HTMLInputElement | null>(null)
+const blogImageInputRef = ref<HTMLInputElement | null>(null)
 const mdUploading = ref(false)
+const blogImageUploading = ref(false)
 const resourceDialogVisible = ref(false)
 const resourceForm = reactive({ title: '', contest: '', type: '', summary: '' })
 const resourceFile = ref<File | null>(null)
+const resourceEditFile = ref<File | null>(null)
 const adminUsers = ref<any[]>([])
 const adminUsersLoading = ref(false)
 const newAdminDialogVisible = ref(false)
@@ -1318,6 +1328,10 @@ async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
   if (!response.ok) {
     if (response.status === 401) { handleSessionExpired(); throw new Error('登录已过期，请重新登录') }
     const text = await response.text()
+    if (response.status === 403 && !text.trim()) {
+      handleSessionExpired()
+      throw new Error('登录已过期或权限已变更，请重新登录')
+    }
     throw new Error(text || `${response.status} ${response.statusText}`)
   }
   return response.json() as Promise<T>
@@ -1462,6 +1476,20 @@ async function refreshAll() {
   ])
 }
 
+async function restoreSession() {
+  if (!token.value) return
+  try {
+    const user = await api<any>('/users/me')
+    loggedInUser.value = user
+    const role = normalizeRole(user.role)
+    isApplyingAuth.value = true; selectedRole.value = role; isApplyingAuth.value = false
+    localStorage.setItem(ROLE_KEY, role)
+    await refreshAll()
+  } catch (error) {
+    handleSessionExpired()
+  }
+}
+
 const routeByView: Record<string, string> = {
   dashboard: '/', resources: '/resources', blog: '/blogs', blogEditor: '/blogs/editor',
   blogDetail: '/blogs/detail', salon: '/salons', teams: '/teams', profile: '/profile',
@@ -1600,7 +1628,7 @@ function mapSalon(item: any): SalonView {
   const date = new Date(item.startsAt)
   const month = Number.isNaN(date.getTime()) ? '本月' : `${date.getMonth() + 1}月`
   const day = Number.isNaN(date.getTime()) ? '--' : String(date.getDate()).padStart(2, '0')
-  return { id: item.id, title: item.title, speaker: item.speaker || '特邀嘉宾', date: item.startsAtText || formatChineseDateTime(date), month, day, place: item.place, capacity: item.capacity, booked: item.booked, description: item.description }
+  return { id: item.id, speakerId: item.speakerId, title: item.title, speaker: item.speaker || '特邀嘉宾', date: item.startsAtText || formatChineseDateTime(date), month, day, place: item.place, capacity: item.capacity, booked: item.booked, description: item.description }
 }
 
 function formatChineseDateTime(date: Date) {
@@ -1639,25 +1667,60 @@ function typeLabel(type: string) { return ({ resource: '资源', blog: '博客',
 
 async function downloadResource(resource: ResourceView) {
   try {
-    const result = await api<{ downloadCount: number }>(`/resources/${resource.id}/download`, { method: 'POST' })
+    const result = await api<{ downloadUrl: string; downloadCount: number }>(`/resources/${resource.id}/download`, { method: 'POST' })
+    const response = await fetch(result.downloadUrl, { headers: token.value ? { Authorization: `Bearer ${token.value}` } : {} })
+    if (!response.ok) { if (response.status === 401 || response.status === 403) throw handleSessionExpired(), Error('登录已过期，请重新登录'); throw Error(await response.text() || '下载失败') }
+    const blob = await response.blob()
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = downloadFileName(response, resource.title)
+    document.body.appendChild(anchor)
+    anchor.click()
+    anchor.remove()
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000)
     resource.downloads = result.downloadCount; await loadHotResources()
-    ElMessage.success(`开始下载「${resource.title}」，安全链接已生成，请在弹窗中保存`)
+    ElMessage.success(`开始下载「${resource.title}」`)
   } catch (error) { ElMessage.error(error instanceof Error ? error.message : '下载失败') }
 }
+function downloadFileName(response: Response, fallback: string) {
+  const disposition = response.headers.get('Content-Disposition') || response.headers.get('content-disposition') || ''
+  const encoded = disposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1]
+  if (encoded) {
+    try { return decodeURIComponent(encoded) } catch {}
+  }
+  const plain = disposition.match(/filename="?([^";]+)"?/i)?.[1]
+  return plain || fallback
+}
 function canManageResource(resource: ResourceView) { return isContentAdmin.value || resource.uploaderId === currentUser.value.id }
-function openResourceEditor(resource: ResourceView) { resourceEditor.id = resource.id; resourceEditor.title = resource.title; resourceEditor.contest = resource.contest; resourceEditor.type = resource.type; resourceEditor.summary = resource.summary; resourceEditorVisible.value = true }
+function openResourceEditor(resource: ResourceView) { resourceEditor.id = resource.id; resourceEditor.title = resource.title; resourceEditor.contest = resource.contest; resourceEditor.type = resource.type; resourceEditor.summary = resource.summary; resourceEditFile.value = null; resourceEditorVisible.value = true }
+function handleResourceEditFileChange(event: Event) {
+  const input = event.target as HTMLInputElement
+  resourceEditFile.value = input.files?.[0] || null
+}
 async function saveResourceEdit() {
   if (!resourceEditor.id) return
   try {
-    await api(`/resources/${resourceEditor.id}`, { method: 'PUT', body: JSON.stringify({ title: resourceEditor.title, contest: resourceEditor.contest, type: resourceEditor.type, summary: resourceEditor.summary }) })
-    resourceEditorVisible.value = false; await loadResources()
+    const formData = new FormData()
+    formData.append('title', resourceEditor.title)
+    formData.append('contest', resourceEditor.contest)
+    formData.append('type', resourceEditor.type)
+    formData.append('summary', resourceEditor.summary)
+    if (resourceEditFile.value) formData.append('file', resourceEditFile.value)
+    const response = await fetch(`${API_BASE}/resources/${resourceEditor.id}/upload`, {
+      method: 'PUT',
+      headers: token.value ? { Authorization: `Bearer ${token.value}` } : {},
+      body: formData,
+    })
+    if (!response.ok) { if (response.status === 401 || response.status === 403) throw handleSessionExpired(), Error('登录已过期，请重新登录'); throw Error(await response.text() || '编辑资源失败') }
+    resourceEditorVisible.value = false; resourceEditFile.value = null; await Promise.all([loadResources(), loadOverview()])
     ElMessage.success('资源已更新')
   } catch (error) { ElMessage.error(error instanceof Error ? error.message : '编辑资源失败，只有上传者或管理员可以编辑') }
 }
 async function deleteResource(resource: ResourceView) {
   try {
     await api(`/resources/${resource.id}`, { method: 'DELETE' })
-    await Promise.all([loadResources(), isContentAdmin.value ? loadAdmin() : Promise.resolve()])
+    await Promise.all([loadResources(), loadHotResources(), loadOverview(), isContentAdmin.value ? loadAdmin() : Promise.resolve()])
     ElMessage.success(`资源已删除：${resource.title}`)
   } catch (error) { ElMessage.error(error instanceof Error ? error.message : '删除资源失败，只有上传者或管理员可以删除') }
 }
@@ -1666,7 +1729,7 @@ async function deleteSelectedResources() {
   try {
     await confirmAction(`确定要批量删除选中的 ${selectedResourceIds.value.length} 个资源吗？`)
     await api('/resources/batch', { method: 'DELETE', body: JSON.stringify({ ids: selectedResourceIds.value }) })
-    await Promise.all([loadResources(), isContentAdmin.value ? loadAdmin() : Promise.resolve()])
+    await Promise.all([loadResources(), loadOverview(), isContentAdmin.value ? loadAdmin() : Promise.resolve()])
     ElMessage.success('已批量删除所选资源')
   } catch (error) { if (error !== 'cancel') ElMessage.error(error instanceof Error ? error.message : '批量删除资源失败') }
 }
@@ -1722,8 +1785,8 @@ async function submitResource() {
     }
     resourceDialogVisible.value = false
     resourceFile.value = null
-    await Promise.all([loadResources(), isContentAdmin.value ? loadAdmin() : Promise.resolve()])
-    ElMessage.success('资源已提交审核，等待管理员审核通过后公开')
+    await Promise.all([loadResources(), loadOverview(), isContentAdmin.value ? loadAdmin() : Promise.resolve()])
+    ElMessage.success(isContentAdmin.value ? '资源已发布' : '资源已提交审核，等待管理员审核通过后公开')
   } catch (error) { ElMessage.error(error instanceof Error ? error.message : '创建资源失败') }
 }
 
@@ -1732,6 +1795,33 @@ function insertBlogImage() {
   draftBlog.imageUrl = imageUrl
   if (!draftBlog.content.includes(imageUrl)) draftBlog.content = `${draftBlog.content.trim()}\n\n![竞赛经验图](${imageUrl})`
   ElMessage.success('图片 Markdown 已插入')
+}
+function triggerBlogImageInput() { blogImageInputRef.value?.click() }
+async function handleBlogImageUpload(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file) return
+  if (!file.type.startsWith('image/')) { ElMessage.warning('请选择图片文件'); return }
+  blogImageUploading.value = true
+  try {
+    const formData = new FormData()
+    formData.append('file', file)
+    const response = await fetch(`${API_BASE}/blogs/upload-image`, {
+      method: 'POST',
+      headers: token.value ? { Authorization: `Bearer ${token.value}` } : {},
+      body: formData,
+    })
+    if (!response.ok) { if (response.status === 401 || response.status === 403) throw handleSessionExpired(), Error('登录已过期，请重新登录'); throw Error(await response.text() || '图片上传失败') }
+    const data = await response.json()
+    draftBlog.imageUrl = data.url
+    if (!draftBlog.content.includes(data.url)) draftBlog.content = `${draftBlog.content.trim()}\n\n![${file.name}](${data.url})`
+    ElMessage.success('图片已上传并插入')
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '图片上传失败')
+  } finally {
+    blogImageUploading.value = false
+  }
 }
 
 function resetDraftBlog() {
@@ -1776,8 +1866,8 @@ async function publishBlog() {
     const content = imageUrl && !draftBlog.content.includes(imageUrl) ? `${draftBlog.content.trim()}\n\n![竞赛经验图](${imageUrl})` : draftBlog.content
     const path = editingBlogId.value ? `/blogs/${editingBlogId.value}` : '/blogs'
     await api(path, { method: editingBlogId.value ? 'PUT' : 'POST', body: JSON.stringify({ title: draftBlog.title, content, contestTag: draftBlog.contestTag, anonymous: draftBlog.anonymous, visibility: draftBlog.visibility.toUpperCase(), commentsOpen: draftBlog.commentsOpen }) })
-    await Promise.all([loadBlogs(), isContentAdmin.value ? loadAdmin() : Promise.resolve()])
-    navigateTo('blog'); ElMessage.success('博客已提交审核，等待管理员审核通过后公开')
+    await Promise.all([loadBlogs(), loadOverview(), isContentAdmin.value ? loadAdmin() : Promise.resolve()])
+    navigateTo('blog'); ElMessage.success(isContentAdmin.value ? '博客已发布' : '博客已提交审核，等待管理员审核通过后公开')
   } catch (error) { ElMessage.error(error instanceof Error ? error.message : '发布博客失败') }
 }
 async function deleteBlog(post: BlogView) {
@@ -1838,8 +1928,8 @@ async function submitSalon() {
   try {
     await api('/salons', { method: 'POST', body: JSON.stringify({ ...salonForm }) })
     salonDialogVisible.value = false
-    await Promise.all([loadSalons(), isContentAdmin.value ? loadAdmin() : Promise.resolve()])
-    ElMessage.success('沙龙已提交审核，等待管理员审核通过后开放预约')
+    await Promise.all([loadSalons(), loadOverview(), isContentAdmin.value ? loadAdmin() : Promise.resolve()])
+    ElMessage.success(isContentAdmin.value ? '沙龙已发布，已开放预约' : '沙龙已提交审核，等待管理员审核通过后开放预约')
   } catch (error) { ElMessage.error(error instanceof Error ? error.message : '创建沙龙失败') }
 }
 async function bookSalon(salon: SalonView) {
@@ -1849,6 +1939,15 @@ async function bookSalon(salon: SalonView) {
     await Promise.all([loadSalons(), loadBookings()])
     ElMessage.success(`预约成功！「${salon.title}」凭证已生成，请在个人中心查看`)
   } catch (error) { ElMessage.error(error instanceof Error ? error.message : '预约失败') }
+}
+function canManageSalon(salon: SalonView) { return isContentAdmin.value || salon.speakerId === currentUser.value.id }
+async function deleteSalon(salon: SalonView) {
+  try {
+    await confirmAction(`确定要删除沙龙「${salon.title}」吗？`)
+    await api(`/salons/${salon.id}`, { method: 'DELETE' })
+    await Promise.all([loadSalons(), loadBookings(), loadOverview(), isContentAdmin.value ? loadAdmin() : Promise.resolve()])
+    ElMessage.success('沙龙已删除')
+  } catch (error) { if (error !== 'cancel') ElMessage.error(error instanceof Error ? error.message : '删除沙龙失败') }
 }
 
 async function publishTeam() {
@@ -1961,7 +2060,7 @@ async function exportSalonAppointments() {
 async function reviewItem(row: ReviewView, status: 'APPROVED' | 'REJECTED') {
   try {
     await api(`/admin/reviews/${row.id}`, { method: 'PATCH', body: JSON.stringify({ status }) })
-    await Promise.all([loadAdmin(), loadResources(), loadBlogs(), loadSalons(), loadTeams()])
+    await Promise.all([loadAdmin(), loadResources(), loadBlogs(), loadSalons(), loadTeams(), loadOverview()])
     ElMessage.success(`审核状态已更新为：${status === 'APPROVED' ? '已通过' : '已驳回'}`)
   } catch (error) { ElMessage.error(error instanceof Error ? error.message : '审核失败') }
 }
@@ -1979,7 +2078,7 @@ async function reviewSelected(status: 'APPROVED' | 'REJECTED') {
   try {
     await confirmAction(`确定要${label}选中的 ${selectedReviewIds.value.length} 条记录吗？`)
     await api('/admin/reviews/batch', { method: 'PATCH', body: JSON.stringify({ ids: selectedReviewIds.value, status }) })
-    await Promise.all([loadAdmin(), loadResources(), loadBlogs(), loadSalons(), loadTeams()]); ElMessage.success(`已${label}`)
+    await Promise.all([loadAdmin(), loadResources(), loadBlogs(), loadSalons(), loadTeams(), loadOverview()]); ElMessage.success(`已${label}`)
   } catch (error) { if (error !== 'cancel') ElMessage.error(error instanceof Error ? error.message : `${label}失败`) }
 }
 function changeReviewPage(page: number) { reviewPage.current = page; loadAdmin() }
@@ -1987,8 +2086,14 @@ function changeReviewPage(page: number) { reviewPage.current = page; loadAdmin()
 async function transferSuperAdmin(userId: number) {
   try {
     await confirmAction('确定要转让超级管理员权限吗？转让后您将不再是超级管理员。')
-    await api(`/admin/super/users/${userId}/transfer`, { method: 'POST' }); await refreshAll()
-    ElMessage.success('超级管理员权限已转让')
+    await api(`/admin/super/users/${userId}/transfer`, { method: 'POST' })
+    selectedRole.value = 'admin'
+    currentUser.value.role = 'admin'
+    localStorage.setItem(ROLE_KEY, selectedRole.value)
+    sessionStorage.setItem(ROLE_KEY, selectedRole.value)
+    navigateTo('admin')
+    await Promise.all([loadAdmin(), loadManagedUsers(), loadAdminUsers()])
+    ElMessage.success('超级管理员权限已转让，当前账号已切换为管理员视图')
   } catch (error) { if (error !== 'cancel') ElMessage.error(error instanceof Error ? error.message : '转让失败') }
 }
 
@@ -2055,18 +2160,26 @@ async function removeAdminUser(row: any) {
 
 function triggerMdFileInput() { mdFileInputRef.value?.click() }
 function handleMdDrop(event: DragEvent) {
-  const file = event.dataTransfer?.files?.[0]
-  if (file && file.name.toLowerCase().endsWith('.md')) { uploadMdFile(file) }
-  else { ElMessage.warning('请上传 .md 文件') }
+  const files = Array.from(event.dataTransfer?.files || [])
+  const file = findBlogImportFile(files)
+  if (file) { uploadMdFile(file, files.filter(item => item !== file)) }
+  else { ElMessage.warning('请上传 .md、.txt、.docx 或 .pdf 文件') }
 }
 function handleMdFileChange(event: Event) {
-  const input = event.target as HTMLInputElement; const file = input.files?.[0]
-  if (file) uploadMdFile(file); input.value = ''
+  const input = event.target as HTMLInputElement; const files = Array.from(input.files || [])
+  const file = findBlogImportFile(files)
+  if (file) uploadMdFile(file, files.filter(item => item !== file))
+  else if (files.length > 0) ElMessage.warning('请至少选择一个 .md、.txt、.docx 或 .pdf 文件')
+  input.value = ''
 }
-async function uploadMdFile(file: File) {
+function findBlogImportFile(files: File[]) {
+  return files.find(file => /\.(md|txt|docx|pdf)$/i.test(file.name))
+}
+async function uploadMdFile(file: File, attachments: File[] = []) {
   mdUploading.value = true
   try {
     const formData = new FormData(); formData.append('file', file)
+    attachments.filter(item => item.type.startsWith('image/') || /\.(png|jpe?g|gif|webp|bmp)$/i.test(item.name)).forEach(item => formData.append('files', item))
     const response = await fetch(`${API_BASE}/blog/upload-md`, {
       method: 'POST', headers: token.value ? { Authorization: `Bearer ${token.value}` } : {}, body: formData,
     })
@@ -2074,10 +2187,10 @@ async function uploadMdFile(file: File) {
     const data = await response.json()
     if (data.title) draftBlog.title = data.title
     if (data.content) draftBlog.content = data.content
-    blogEditorMode.value = 'markdown'
+    blogEditorMode.value = file.name.toLowerCase().endsWith('.md') ? 'markdown' : 'text'
     blogEditorTab.value = 'write'
     window.requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: 'smooth' }))
-    ElMessage.success(`已成功导入「${data.fileName || file.name}」，标题内容已自动填充`)
+    ElMessage.success(`已成功导入「${data.fileName || file.name}」，标题内容和关联图片已自动填充`)
   } catch (error) { ElMessage.error(error instanceof Error ? error.message : '上传文件失败') }
   finally { mdUploading.value = false }
 }
@@ -2095,6 +2208,7 @@ onMounted(() => {
   syncViewFromLocation()
   window.history.replaceState({ view: activeView.value }, '', pathForView(activeView.value))
   window.addEventListener('popstate', syncViewFromLocation)
+  void restoreSession()
 })
 onUnmounted(() => { window.removeEventListener('popstate', syncViewFromLocation) })
 </script>

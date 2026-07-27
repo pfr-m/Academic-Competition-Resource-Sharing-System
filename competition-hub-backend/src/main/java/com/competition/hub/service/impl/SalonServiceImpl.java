@@ -146,6 +146,17 @@ public class SalonServiceImpl extends ServiceImpl<SalonMapper, Salon> implements
     }
 
     @Override
+    @Transactional
+    public void deleteSalon(Long salonId) {
+        Salon salon = getById(salonId);
+        if (salon == null) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "沙龙不存在");
+        }
+        appointmentMapper.delete(new LambdaQueryWrapper<SalonAppointment>().eq(SalonAppointment::getSalonId, salonId));
+        removeById(salonId);
+    }
+
+    @Override
     public void updateStatus(Long id, String status) {
         Salon salon = getById(id);
         if (salon == null) {

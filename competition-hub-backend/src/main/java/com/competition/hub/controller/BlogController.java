@@ -15,7 +15,17 @@ import com.competition.hub.store.DomainModels.Visibility;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import org.apache.pdfbox.Loader;
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.text.PDFTextStripper;
+import org.apache.poi.xwpf.usermodel.XWPFDocument;
+import org.apache.poi.xwpf.usermodel.XWPFParagraph;
 import org.springframework.http.HttpStatus;
+import org.springframework.core.io.UrlResource;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -30,12 +40,27 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.net.MalformedURLException;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.Duration;
 import java.nio.charset.StandardCharsets;
+import java.nio.charset.Charset;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/blogs")
@@ -46,6 +71,11 @@ public class BlogController {
     private final RedisCacheService redisCacheService;
     private final ReviewService reviewService;
     private final UserService userService;
+    private final Path imageRoot = Paths.get("uploads", "blog-images").toAbsolutePath().normalize();
+    private final HttpClient imageHttpClient = HttpClient.newBuilder()
+            .connectTimeout(Duration.ofSeconds(8))
+            .followRedirects(HttpClient.Redirect.NORMAL)
+            .build();
 
     public BlogController(BlogService blogService, BlogCommentService blogCommentService, BlogSocialService blogSocialService, RedisCacheService redisCacheService, ReviewService reviewService, UserService userService) {
         this.blogService = blogService;
@@ -65,7 +95,7 @@ public class BlogController {
             @RequestParam(required = false) String contestTag,
             @RequestParam(required = false) String visibility
     ) {
-        IPage<Blog> result = blogService.pageVisible(principal.id(), page, size, keyword, contestTag, visibility);
+        IPage<Blog> result = blogService.pageVisible(principal.id(), isReviewer(principal), page, size, keyword, contestTag, visibility);
         List<Map<String, Object>> records = result.getRecords().stream()
                 .map(blog -> presentBlog(blog, principal.id()))
                 .toList();
@@ -74,7 +104,7 @@ public class BlogController {
 
     @GetMapping("/{id}")
     public Map<String, Object> detail(@AuthenticationPrincipal AuthPrincipal principal, @PathVariable long id) {
-        Blog blog = blogService.requireReadable(id, principal.id());
+        Blog blog = blogService.requireReadable(id, principal.id(), isReviewer(principal));
         redisCacheService.incrementBlogView(id);
         Map<String, Object> cached = redisCacheService.getBlogDetail(id);
         if (cached == null) {
@@ -91,7 +121,7 @@ public class BlogController {
 
     @PostMapping("/{id}/actions")
     public Map<String, Object> toggleAction(@AuthenticationPrincipal AuthPrincipal principal, @PathVariable long id, @Valid @RequestBody BlogActionRequest request) {
-        blogService.requireReadable(id, principal.id());
+        blogService.requireReadable(id, principal.id(), isReviewer(principal));
         Map<String, Object> result = blogSocialService.toggleLikeCollect(id, principal.id(), request.type());
         redisCacheService.evictBlogDetail(id);
         return result;
@@ -99,7 +129,7 @@ public class BlogController {
 
     @PostMapping("/{id}/follow-author")
     public Map<String, Object> toggleFollowAuthor(@AuthenticationPrincipal AuthPrincipal principal, @PathVariable long id) {
-        Blog blog = blogService.requireReadable(id, principal.id());
+        Blog blog = blogService.requireReadable(id, principal.id(), isReviewer(principal));
         return blogSocialService.toggleFollow(blog.getAuthorId(), principal.id());
     }
 
@@ -114,30 +144,76 @@ public class BlogController {
                 .anonymous(request.anonymous())
                 .visibility(request.visibility().name())
                 .commentsOpen(request.commentsOpen())
-                .status("PENDING")
+                .status(isReviewer(principal) ? "APPROVED" : "PENDING")
                 .build();
         Blog saved = blogService.createBlog(blog);
-        reviewService.createReview("blog", saved.getId(), saved.getTitle(), principal.id());
+        if (!isReviewer(principal)) {
+            reviewService.createReview("blog", saved.getId(), saved.getTitle(), principal.id());
+        }
         return presentBlog(saved, principal.id());
     }
 
     @PostMapping("/upload-md")
     public Map<String, Object> uploadMarkdown(
             @AuthenticationPrincipal AuthPrincipal principal,
-            @RequestParam("file") MultipartFile file
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(value = "files", required = false) List<MultipartFile> files
     ) {
-        return parseMarkdownUpload(principal, file);
+        return parseMarkdownUpload(principal, file, files == null ? List.of() : files);
     }
 
-    private Map<String, Object> parseMarkdownUpload(AuthPrincipal principal, MultipartFile file) {
+    @PostMapping(path = "/upload-image", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public Map<String, Object> uploadImage(@RequestParam("file") MultipartFile file) {
         if (file.isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请选择要上传的 .md 文件");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请选择要上传的图片");
+        }
+        String contentType = file.getContentType() == null ? "" : file.getContentType().toLowerCase();
+        if (!contentType.startsWith("image/")) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "仅支持上传图片文件");
+        }
+        String originalName = file.getOriginalFilename() == null ? "blog-image" : Paths.get(file.getOriginalFilename()).getFileName().toString();
+        String storedName = UUID.randomUUID() + "-" + originalName.replaceAll("[\\\\/:*?\"<>|]", "_");
+        try {
+            Files.createDirectories(imageRoot);
+            file.transferTo(imageRoot.resolve(storedName));
+        } catch (IOException error) {
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "图片保存失败");
+        }
+        return Map.of("url", "/api/blogs/images/" + storedName, "fileName", originalName);
+    }
+
+    @GetMapping("/images/{fileName:.+}")
+    public ResponseEntity<org.springframework.core.io.Resource> image(@PathVariable String fileName) {
+        Path filePath = imageRoot.resolve(fileName).normalize();
+        if (!filePath.startsWith(imageRoot) || !Files.exists(filePath)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "图片不存在");
+        }
+        try {
+            org.springframework.core.io.Resource image = new UrlResource(filePath.toUri());
+            String contentType = Files.probeContentType(filePath);
+            MediaType mediaType = contentType == null ? MediaType.APPLICATION_OCTET_STREAM : MediaType.parseMediaType(contentType);
+            return ResponseEntity.ok()
+                    .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.inline().filename(fileName, StandardCharsets.UTF_8).build().toString())
+                    .contentType(mediaType)
+                    .body(image);
+        } catch (IOException error) {
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "图片读取失败");
+        }
+    }
+
+    public Map<String, Object> parseMarkdownUpload(AuthPrincipal principal, MultipartFile file, List<MultipartFile> attachments) {
+        if (file.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请选择要上传的博客文件");
         }
         String originalName = file.getOriginalFilename() == null ? "" : file.getOriginalFilename().toLowerCase();
-        if (!originalName.endsWith(".md")) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "格式错误：仅支持上传标准的 .md 文件");
+        if (!isSupportedBlogFile(originalName)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "格式错误：仅支持上传 .md、.txt、.docx、.pdf 文件");
         }
-        String markdown = readMarkdown(file);
+        String markdown = readBlogFile(file, originalName);
+        if (originalName.endsWith(".md")) {
+            markdown = rewriteUploadedMarkdownImages(markdown, attachments);
+            markdown = rewriteRemoteMarkdownImages(markdown);
+        }
         ParsedMarkdown parsed = extractMarkdown(markdown);
         return Map.of(
                 "title", parsed.title(),
@@ -176,13 +252,14 @@ public class BlogController {
         }
         blogService.removeById(id);
         blogCommentService.deleteByBlogId(id);
+        deleteBlogImages(blog.getContent());
         redisCacheService.evictBlogDetail(id);
         return Map.of("deleted", true);
     }
 
     @PostMapping("/{id}/comments")
     public Map<String, Object> comment(@AuthenticationPrincipal AuthPrincipal principal, @PathVariable long id, @Valid @RequestBody CreateCommentRequest request) {
-        Blog blog = blogService.requireReadable(id, principal.id());
+        Blog blog = blogService.requireReadable(id, principal.id(), isReviewer(principal));
         if (!blog.getCommentsOpen()) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "作者已关闭评论区");
         }
@@ -208,7 +285,7 @@ public class BlogController {
 
     @DeleteMapping("/{blogId}/comments/{commentId}")
     public Map<String, Object> deleteComment(@AuthenticationPrincipal AuthPrincipal principal, @PathVariable long blogId, @PathVariable long commentId) {
-        Blog blog = blogService.requireReadable(blogId, principal.id());
+        Blog blog = blogService.requireReadable(blogId, principal.id(), isReviewer(principal));
         BlogComment comment = blogCommentService.requireInBlog(commentId, blogId);
         boolean canDelete = comment.getAuthorId().equals(principal.id()) || blog.getAuthorId().equals(principal.id()) || principal.role() == Role.ADMIN || principal.role() == Role.SUPER_ADMIN;
         if (!canDelete) {
@@ -276,16 +353,202 @@ public class BlogController {
         return contestTag == null || contestTag.isBlank() ? "经验分享" : contestTag.trim();
     }
 
-    private String readMarkdown(MultipartFile file) {
+    private boolean isReviewer(AuthPrincipal principal) {
+        return principal.role() == Role.ADMIN || principal.role() == Role.SUPER_ADMIN;
+    }
+
+    private boolean isSupportedBlogFile(String originalName) {
+        return originalName.endsWith(".md") || originalName.endsWith(".txt") || originalName.endsWith(".docx") || originalName.endsWith(".pdf");
+    }
+
+    private String readBlogFile(MultipartFile file, String originalName) {
+        if (originalName.endsWith(".docx")) {
+            return readDocx(file);
+        }
+        if (originalName.endsWith(".pdf")) {
+            return readPdf(file);
+        }
+        return readText(file);
+    }
+
+    private String readText(MultipartFile file) {
         try {
-            return new String(file.getBytes(), StandardCharsets.UTF_8);
+            byte[] bytes = file.getBytes();
+            String utf8 = stripBom(new String(bytes, StandardCharsets.UTF_8));
+            if (looksMisdecoded(utf8)) {
+                return stripBom(new String(bytes, Charset.forName("GBK")));
+            }
+            return utf8;
         } catch (IOException error) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "无法读取 Markdown 文件内容");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "无法读取文件内容");
+        }
+    }
+
+    private String stripBom(String text) {
+        return text == null ? "" : text.replaceFirst("^\\uFEFF", "");
+    }
+
+    private boolean looksMisdecoded(String text) {
+        if (text == null || text.isBlank()) return false;
+        long replacement = text.chars().filter(ch -> ch == '\uFFFD').count();
+        long mojibake = text.chars().filter(ch -> ch == '锟' || ch == '�').count();
+        return replacement + mojibake > 0 || text.contains("鍩") || text.contains("涓") || text.contains("銆");
+    }
+
+    private String readDocx(MultipartFile file) {
+        try (XWPFDocument document = new XWPFDocument(file.getInputStream())) {
+            return document.getParagraphs().stream()
+                    .map(XWPFParagraph::getText)
+                    .filter(text -> text != null && !text.isBlank())
+                    .collect(Collectors.joining("\n\n"));
+        } catch (IOException error) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "无法解析 Word 文件内容");
+        }
+    }
+
+    private String readPdf(MultipartFile file) {
+        try (PDDocument document = Loader.loadPDF(file.getBytes())) {
+            return new PDFTextStripper().getText(document).trim();
+        } catch (IOException error) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "无法解析 PDF 文件内容");
+        }
+    }
+
+    private String rewriteUploadedMarkdownImages(String markdown, List<MultipartFile> attachments) {
+        Map<String, String> uploadedImages = attachments.stream()
+                .filter(file -> file != null && !file.isEmpty() && isImageUpload(file))
+                .collect(Collectors.toMap(file -> Paths.get(file.getOriginalFilename() == null ? "" : file.getOriginalFilename()).getFileName().toString(), this::storeBlogImage, (first, second) -> first));
+        if (uploadedImages.isEmpty()) {
+            return markdown;
+        }
+        String rewritten = replaceMarkdownImageLinks(markdown, uploadedImages);
+        return replaceHtmlImageLinks(rewritten, uploadedImages);
+    }
+
+    private boolean isImageUpload(MultipartFile file) {
+        String contentType = file.getContentType() == null ? "" : file.getContentType().toLowerCase();
+        String name = file.getOriginalFilename() == null ? "" : file.getOriginalFilename().toLowerCase();
+        return contentType.startsWith("image/") || name.matches(".*\\.(png|jpg|jpeg|gif|webp|bmp)$");
+    }
+
+    private String storeBlogImage(MultipartFile file) {
+        String originalName = file.getOriginalFilename() == null ? "blog-image" : Paths.get(file.getOriginalFilename()).getFileName().toString();
+        String storedName = UUID.randomUUID() + "-" + originalName.replaceAll("[\\\\/:*?\"<>|]", "_");
+        try {
+            Files.createDirectories(imageRoot);
+            file.transferTo(imageRoot.resolve(storedName));
+        } catch (IOException error) {
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "图片保存失败");
+        }
+        return "/api/blogs/images/" + storedName;
+    }
+
+    private String replaceMarkdownImageLinks(String markdown, Map<String, String> uploadedImages) {
+        Matcher matcher = Pattern.compile("!\\[([^\\]]*)]\\(([^)\\s]+)(?:\\s+\"[^\"]*\")?\\)").matcher(markdown);
+        StringBuffer output = new StringBuffer();
+        while (matcher.find()) {
+            String imageName = Paths.get(matcher.group(2).replace("\\", "/")).getFileName().toString();
+            String serverUrl = uploadedImages.get(imageName);
+            if (serverUrl == null) continue;
+            matcher.appendReplacement(output, Matcher.quoteReplacement("![" + matcher.group(1) + "](" + serverUrl + ")"));
+        }
+        matcher.appendTail(output);
+        return output.toString();
+    }
+
+    private String replaceHtmlImageLinks(String markdown, Map<String, String> uploadedImages) {
+        Matcher matcher = Pattern.compile("(?i)<img\\b([^>]*?)\\bsrc\\s*=\\s*(['\"])(.*?)\\2([^>]*)>").matcher(markdown);
+        StringBuffer output = new StringBuffer();
+        while (matcher.find()) {
+            String imageName = Paths.get(matcher.group(3).replace("\\", "/")).getFileName().toString();
+            String serverUrl = uploadedImages.get(imageName);
+            if (serverUrl == null) continue;
+            matcher.appendReplacement(output, Matcher.quoteReplacement("<img" + matcher.group(1) + "src=" + matcher.group(2) + serverUrl + matcher.group(2) + matcher.group(4) + ">"));
+        }
+        matcher.appendTail(output);
+        return output.toString();
+    }
+
+    private String rewriteRemoteMarkdownImages(String markdown) {
+        String rewritten = replaceRemoteMarkdownImageLinks(markdown);
+        return replaceRemoteHtmlImageLinks(rewritten);
+    }
+
+    private String replaceRemoteMarkdownImageLinks(String markdown) {
+        Matcher matcher = Pattern.compile("!\\[([^\\]]*)]\\((https?://[^)\\s]+)(?:\\s+\"[^\"]*\")?\\)").matcher(markdown);
+        StringBuffer output = new StringBuffer();
+        while (matcher.find()) {
+            String serverUrl = downloadRemoteImage(matcher.group(2));
+            if (serverUrl == null) continue;
+            matcher.appendReplacement(output, Matcher.quoteReplacement("![" + matcher.group(1) + "](" + serverUrl + ")"));
+        }
+        matcher.appendTail(output);
+        return output.toString();
+    }
+
+    private String replaceRemoteHtmlImageLinks(String markdown) {
+        Matcher matcher = Pattern.compile("(?i)<img\\b([^>]*?)\\bsrc\\s*=\\s*(['\"])(https?://.*?)\\2([^>]*)>").matcher(markdown);
+        StringBuffer output = new StringBuffer();
+        while (matcher.find()) {
+            String serverUrl = downloadRemoteImage(matcher.group(3));
+            if (serverUrl == null) continue;
+            matcher.appendReplacement(output, Matcher.quoteReplacement("<img" + matcher.group(1) + "src=" + matcher.group(2) + serverUrl + matcher.group(2) + matcher.group(4) + ">"));
+        }
+        matcher.appendTail(output);
+        return output.toString();
+    }
+
+    private String downloadRemoteImage(String url) {
+        try {
+            HttpRequest request = HttpRequest.newBuilder(URI.create(url))
+                    .timeout(Duration.ofSeconds(15))
+                    .header("User-Agent", "Mozilla/5.0")
+                    .GET()
+                    .build();
+            HttpResponse<InputStream> response = imageHttpClient.send(request, HttpResponse.BodyHandlers.ofInputStream());
+            if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                return null;
+            }
+            String contentType = response.headers().firstValue("content-type").orElse("").toLowerCase();
+            String extension = imageExtension(url, contentType);
+            String storedName = UUID.randomUUID() + "-remote" + extension;
+            Files.createDirectories(imageRoot);
+            Files.copy(response.body(), imageRoot.resolve(storedName));
+            return "/api/blogs/images/" + storedName;
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private String imageExtension(String url, String contentType) {
+        String lowerUrl = url.toLowerCase();
+        for (String extension : List.of(".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp")) {
+            if (lowerUrl.contains(extension)) return extension;
+        }
+        if (contentType.contains("png")) return ".png";
+        if (contentType.contains("jpeg") || contentType.contains("jpg")) return ".jpg";
+        if (contentType.contains("gif")) return ".gif";
+        if (contentType.contains("webp")) return ".webp";
+        if (contentType.contains("bmp")) return ".bmp";
+        return ".png";
+    }
+
+    private void deleteBlogImages(String content) {
+        if (content == null || content.isBlank()) return;
+        Matcher matcher = Pattern.compile("/api/blogs/images/([^\\s)\"'>]+)").matcher(content);
+        while (matcher.find()) {
+            Path imagePath = imageRoot.resolve(matcher.group(1)).normalize();
+            if (imagePath.startsWith(imageRoot)) {
+                try {
+                    Files.deleteIfExists(imagePath);
+                } catch (IOException ignored) {
+                }
+            }
         }
     }
 
     private ParsedMarkdown extractMarkdown(String markdown) {
-        String normalized = markdown == null ? "" : markdown.trim();
+        String normalized = markdown == null ? "" : markdown.replaceFirst("^\\uFEFF", "").trim();
         if (normalized.isEmpty()) {
             return new ParsedMarkdown("", "");
         }

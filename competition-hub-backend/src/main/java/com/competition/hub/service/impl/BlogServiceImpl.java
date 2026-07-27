@@ -19,16 +19,16 @@ import java.util.List;
 @Service
 public class BlogServiceImpl extends ServiceImpl<BlogMapper, Blog> implements BlogService {
     @Override
-    public List<Blog> listVisible(Long viewerId, String keyword) {
-        LambdaQueryWrapper<Blog> wrapper = visibleWrapper(viewerId, keyword, null, null);
+    public List<Blog> listVisible(Long viewerId, boolean admin, String keyword) {
+        LambdaQueryWrapper<Blog> wrapper = visibleWrapper(viewerId, admin, keyword, null, null);
         return list(wrapper);
     }
 
     @Override
-    public IPage<Blog> pageVisible(Long viewerId, long current, long size, String keyword, String contestTag, String visibility) {
+    public IPage<Blog> pageVisible(Long viewerId, boolean admin, long current, long size, String keyword, String contestTag, String visibility) {
         long safeCurrent = Math.max(current, 1);
         long safeSize = Math.min(Math.max(size, 1), 50);
-        return page(Page.of(safeCurrent, safeSize), visibleWrapper(viewerId, keyword, contestTag, visibility));
+        return page(Page.of(safeCurrent, safeSize), visibleWrapper(viewerId, admin, keyword, contestTag, visibility));
     }
 
     @Override
@@ -48,8 +48,11 @@ public class BlogServiceImpl extends ServiceImpl<BlogMapper, Blog> implements Bl
     }
 
     @Override
-    public Blog requireReadable(Long id, Long viewerId) {
+    public Blog requireReadable(Long id, Long viewerId, boolean admin) {
         Blog blog = requireExisting(id);
+        if (admin) {
+            return blog;
+        }
         if (!"APPROVED".equals(blog.getStatus()) && !blog.getAuthorId().equals(viewerId)) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "博客不存在或未通过审核");
         }
@@ -96,10 +99,14 @@ public class BlogServiceImpl extends ServiceImpl<BlogMapper, Blog> implements Bl
         updateById(blog);
     }
 
-    private LambdaQueryWrapper<Blog> visibleWrapper(Long viewerId, String keyword, String contestTag, String visibility) {
+    private LambdaQueryWrapper<Blog> visibleWrapper(Long viewerId, boolean admin, String keyword, String contestTag, String visibility) {
         LambdaQueryWrapper<Blog> wrapper = new LambdaQueryWrapper<Blog>();
         String normalizedVisibility = StringUtils.hasText(visibility) ? visibility.trim().toUpperCase() : "";
-        if ("PRIVATE".equals(normalizedVisibility)) {
+        if (admin) {
+            if ("PRIVATE".equals(normalizedVisibility) || "PUBLIC".equals(normalizedVisibility)) {
+                wrapper.eq(Blog::getVisibility, normalizedVisibility);
+            }
+        } else if ("PRIVATE".equals(normalizedVisibility)) {
             wrapper.eq(Blog::getAuthorId, viewerId).eq(Blog::getVisibility, "PRIVATE");
         } else if ("PUBLIC".equals(normalizedVisibility)) {
             wrapper.eq(Blog::getStatus, "APPROVED").eq(Blog::getVisibility, "PUBLIC");

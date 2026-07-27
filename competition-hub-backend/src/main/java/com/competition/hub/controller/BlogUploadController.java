@@ -8,6 +8,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -22,8 +23,9 @@ public class BlogUploadController {
     @PostMapping("/upload-md")
     public Map<String, Object> uploadMarkdown(
             @AuthenticationPrincipal AuthPrincipal principal,
-            @RequestParam("file") MultipartFile file
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(value = "files", required = false) List<MultipartFile> files
     ) {
-        return blogController.uploadMarkdown(principal, file);
+        return blogController.uploadMarkdown(principal, file, files);
     }
 }

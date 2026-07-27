@@ -10,6 +10,8 @@ public interface RedisCacheService {
 
     void incrementResourceDownload(Long resourceId);
 
+    void removeResourceDownload(Long resourceId);
+
     List<Map<String, Object>> hotResourceRanking();
 
     List<Map<String, Object>> getContestResourceCache(String contest);

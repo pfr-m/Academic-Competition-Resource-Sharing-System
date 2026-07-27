@@ -101,10 +101,12 @@ public class ResourceController {
         item.setOriginalFileName(request.fileKey());
         item.setFileSize(0L);
         item.setContentType("application/octet-stream");
-        item.setStatus("PENDING");
+        item.setStatus(isReviewer(principal) ? "APPROVED" : "PENDING");
         Resource saved = resourceService.createResource(item);
         redisCacheService.evictContestResourceCache(saved.getContest());
-        reviewService.createReview("resource", saved.getId(), saved.getTitle(), principal.id());
+        if (!isReviewer(principal)) {
+            reviewService.createReview("resource", saved.getId(), saved.getTitle(), principal.id());
+        }
         return saved;
     }
 
@@ -141,10 +143,12 @@ public class ResourceController {
         item.setOriginalFileName(originalName);
         item.setFileSize(file.getSize());
         item.setContentType(file.getContentType());
-        item.setStatus("PENDING");
+        item.setStatus(isReviewer(principal) ? "APPROVED" : "PENDING");
         Resource saved = resourceService.createResource(item);
         redisCacheService.evictContestResourceCache(saved.getContest());
-        reviewService.createReview("resource", saved.getId(), saved.getTitle(), principal.id());
+        if (!isReviewer(principal)) {
+            reviewService.createReview("resource", saved.getId(), saved.getTitle(), principal.id());
+        }
         return saved;
     }
 
@@ -175,12 +179,55 @@ public class ResourceController {
         return item;
     }
 
+    @PutMapping(path = "/{id}/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public Resource updateWithFile(
+            @AuthenticationPrincipal AuthPrincipal principal,
+            @PathVariable long id,
+            @RequestParam String title,
+            @RequestParam String contest,
+            @RequestParam String type,
+            @RequestParam String summary,
+            @RequestParam(required = false) MultipartFile file
+    ) {
+        Resource item = resourceService.requireExisting(id);
+        assertCanManage(principal, item);
+        String oldContest = item.getContest();
+        String oldFileKey = item.getFileKey();
+        item.setTitle(title);
+        item.setContest(contest);
+        item.setType(type);
+        item.setSummary(summary);
+        if (file != null && !file.isEmpty()) {
+            String originalName = file.getOriginalFilename() == null ? "resource-file" : Paths.get(file.getOriginalFilename()).getFileName().toString();
+            String storedName = UUID.randomUUID() + "-" + originalName.replaceAll("[\\\\/:*?\"<>|]", "_");
+            try {
+                Files.createDirectories(uploadRoot);
+                file.transferTo(uploadRoot.resolve(storedName));
+                if (oldFileKey != null && !oldFileKey.isBlank()) {
+                    Files.deleteIfExists(uploadRoot.resolve(oldFileKey).normalize());
+                }
+            } catch (IOException error) {
+                throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "文件保存失败");
+            }
+            item.setFileKey(storedName);
+            item.setOriginalFileName(originalName);
+            item.setFileSize(file.getSize());
+            item.setContentType(file.getContentType());
+        }
+        item.setUpdatedAt(LocalDateTime.now());
+        resourceService.updateById(item);
+        redisCacheService.evictContestResourceCache(oldContest);
+        redisCacheService.evictContestResourceCache(item.getContest());
+        return item;
+    }
+
     @DeleteMapping("/{id}")
     public Map<String, Object> delete(@AuthenticationPrincipal AuthPrincipal principal, @PathVariable long id) {
         Resource item = resourceService.requireExisting(id);
         assertCanManage(principal, item);
         resourceService.removeById(id);
         redisCacheService.evictContestResourceCache(item.getContest());
+        redisCacheService.removeResourceDownload(id);
         return Map.of("deleted", true);
     }
 
@@ -206,6 +253,7 @@ public class ResourceController {
         items.forEach(item -> assertCanManage(principal, item));
         resourceService.removeByIds(ids);
         items.forEach(item -> redisCacheService.evictContestResourceCache(item.getContest()));
+        ids.forEach(redisCacheService::removeResourceDownload);
         return Map.of("deleted", ids.size());
     }
 
@@ -258,6 +306,10 @@ public class ResourceController {
         if (!admin && !owner) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "只能管理自己上传的资源");
         }
+    }
+
+    private boolean isReviewer(AuthPrincipal principal) {
+        return "ADMIN".equals(principal.role().name()) || "SUPER_ADMIN".equals(principal.role().name());
     }
 
     public record CreateResourceRequest(

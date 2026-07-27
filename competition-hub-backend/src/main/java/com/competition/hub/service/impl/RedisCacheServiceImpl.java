@@ -40,6 +40,14 @@ public class RedisCacheServiceImpl implements RedisCacheService {
     }
 
     @Override
+    public void removeResourceDownload(Long resourceId) {
+        try {
+            redisTemplate.opsForZSet().remove(RESOURCE_DOWNLOAD_LEADERBOARD, resourceId.toString());
+        } catch (RuntimeException ignored) {
+        }
+    }
+
+    @Override
     public List<Map<String, Object>> hotResourceRanking() {
         Set<ZSetOperations.TypedTuple<Object>> tuples;
         try {
@@ -55,7 +63,10 @@ public class RedisCacheServiceImpl implements RedisCacheService {
             if (tuple.getValue() == null) continue;
             Long id = Long.valueOf(tuple.getValue().toString());
             Resource resource = resourceService.getById(id);
-            if (resource == null) continue;
+            if (resource == null || !"APPROVED".equals(resource.getStatus())) {
+                removeResourceDownload(id);
+                continue;
+            }
             ranking.add(Map.of(
                     "id", resource.getId(),
                     "title", resource.getTitle(),

@@ -54,6 +54,7 @@ public class ReviewServiceImpl extends ServiceImpl<ReviewMapper, Review> impleme
 
     private LambdaQueryWrapper<Review> latestWrapper() {
         return new LambdaQueryWrapper<Review>()
+                .eq(Review::getStatus, "PENDING")
                 .orderByDesc(Review::getCreatedAt);
     }
 
