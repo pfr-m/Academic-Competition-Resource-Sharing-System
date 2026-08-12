@@ -159,7 +159,10 @@ public class ResourceController {
         return Map.of(
                 "downloadUrl", "/api/resources/" + updated.getId() + "/file",
                 "expiresInSeconds", 300,
-                "downloadCount", updated.getDownloadCount()
+                "downloadCount", updated.getDownloadCount(),
+                "fileName", updated.getOriginalFileName(),
+                "fileSize", updated.getFileSize() == null ? 0L : updated.getFileSize(),
+                "contentType", updated.getContentType() == null ? "application/octet-stream" : updated.getContentType()
         );
     }
 
@@ -280,6 +283,7 @@ public class ResourceController {
             return ResponseEntity.ok()
                     .header(HttpHeaders.CONTENT_DISPOSITION, contentDisposition)
                     .contentType(mediaType)
+                    .contentLength(Files.size(filePath))
                     .body(resource);
         } catch (MalformedURLException error) {
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "文件读取失败");

@@ -58,7 +58,7 @@ class ContentSubmissionControllerTest {
     }
 
     @Test
-    void adminBlogSubmissionStillRequiresReview() {
+    void adminBlogSubmissionIsApprovedImmediately() {
         BlogService blogService = mock(BlogService.class);
         BlogCommentService blogCommentService = mock(BlogCommentService.class);
         BlogSocialService blogSocialService = mock(BlogSocialService.class);
@@ -82,11 +82,11 @@ class ContentSubmissionControllerTest {
                 "管理员博客", "内容", "蓝桥杯", false, Visibility.PUBLIC, true
         ));
 
-        assertThat(saved).containsEntry("status", "PENDING");
+        assertThat(saved).containsEntry("status", "APPROVED");
     }
 
     @Test
-    void adminResourceSubmissionStillRequiresReview() {
+    void adminResourceSubmissionIsApprovedImmediately() {
         ResourceService resourceService = mock(ResourceService.class);
         ReviewService reviewService = mock(ReviewService.class);
         RedisCacheService redisCacheService = mock(RedisCacheService.class);
@@ -104,6 +104,6 @@ class ContentSubmissionControllerTest {
                 "备赛资料", "蓝桥杯", "学习笔记", "资料说明", "demo.pdf"
         ));
 
-        assertThat(saved.getStatus()).isEqualTo("PENDING");
+        assertThat(saved.getStatus()).isEqualTo("APPROVED");
     }
 }

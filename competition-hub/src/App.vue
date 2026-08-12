@@ -276,10 +276,12 @@
                 <span><el-icon><User /></el-icon>{{ resource.uploader }}</span>
               </div>
               <div class="card-actions">
-                <el-button type="primary" plain :icon="Download" @click="downloadResource(resource)">安全下载</el-button>
+                <el-button type="primary" plain :icon="Download" :loading="isActionPending(actionKey('resource-download', resource.id))" :disabled="isActionPending(actionKey('resource-download', resource.id))" @click="downloadResource(resource)">
+                  {{ isActionPending(actionKey('resource-download', resource.id)) ? '下载中' : '安全下载' }}
+                </el-button>
                 <template v-if="canManageResource(resource)">
-                  <el-button plain :icon="EditPen" @click="openResourceEditor(resource)">编辑资源</el-button>
-                  <el-button type="danger" plain @click="deleteResource(resource)">删除资源</el-button>
+                  <el-button plain :icon="EditPen" :disabled="isActionPending(actionKey('resource-delete', resource.id))" @click="openResourceEditor(resource)">编辑资源</el-button>
+                  <el-button type="danger" plain :loading="isActionPending(actionKey('resource-delete', resource.id))" :disabled="isActionPending(actionKey('resource-delete', resource.id))" @click="deleteResource(resource)">删除资源</el-button>
                 </template>
               </div>
             </article>
@@ -307,7 +309,7 @@
             </el-form>
             <template #footer>
               <el-button @click="resourceEditorVisible = false">取消</el-button>
-              <el-button type="primary" @click="saveResourceEdit">保存</el-button>
+              <el-button type="primary" :loading="isActionPending('resource-edit')" :disabled="isActionPending('resource-edit')" @click="saveResourceEdit">保存</el-button>
             </template>
           </el-dialog>
         </section>
@@ -382,7 +384,7 @@
                   <el-radio-button label="text">普通文本（Word/PDF）</el-radio-button>
                 </el-radio-group>
                 <el-button @click="goBack">取消</el-button>
-                <el-button type="primary" :icon="EditPen" @click="publishBlog">{{ editingBlogId ? '保存修改' : '发布博客' }}</el-button>
+                <el-button type="primary" :icon="EditPen" :loading="isActionPending('blog-publish')" :disabled="isActionPending('blog-publish')" @click="publishBlog">{{ editingBlogId ? '保存修改' : '发布博客' }}</el-button>
               </div>
               <div class="split-layout blog-editor-layout">
                 <section class="panel editor-panel">
@@ -525,7 +527,7 @@
                 <el-progress :percentage="salonPercent(salon)" :stroke-width="10" />
                 <div class="card-actions">
                   <span>剩余 {{ salon.capacity - salon.booked }} / {{ salon.capacity }} 名额</span>
-                  <el-button type="primary" :disabled="salon.booked >= salon.capacity || bookedSalonIds.includes(salon.id)" @click="bookSalon(salon)">
+                  <el-button type="primary" :loading="isActionPending(actionKey('salon-book', salon.id))" :disabled="salon.booked >= salon.capacity || bookedSalonIds.includes(salon.id) || isActionPending(actionKey('salon-book', salon.id))" @click="bookSalon(salon)">
                     {{ bookedSalonIds.includes(salon.id) ? '已预约' : '立即预约' }}
                   </el-button>
                   <el-button v-if="canManageSalon(salon)" type="danger" plain @click="deleteSalon(salon)">删除沙龙</el-button>
@@ -557,7 +559,7 @@
                         <el-option v-for="skill in allSkills" :key="skill" :label="skill" :value="skill" />
                       </el-select>
                     </el-form-item>
-                    <el-button type="primary" :icon="Plus" @click="publishTeam">发布组队卡片</el-button>
+                    <el-button type="primary" :icon="Plus" :loading="isActionPending('team-publish')" :disabled="isActionPending('team-publish')" @click="publishTeam">发布组队卡片</el-button>
                   </el-form>
                 </section>
                 <section class="panel">
@@ -598,8 +600,8 @@
                     <span>{{ team.unlocked ? team.contact : '双向确认前隐藏' }}</span>
                   </div>
                   <div class="card-actions">
-                    <el-button :icon="Position" :disabled="currentUser.role === 'admin' || team.unlocked" @click="applyTeam(team)">申请加入</el-button>
-                    <el-button type="primary" plain :disabled="!team.applied || team.unlocked || currentUser.role === 'student'" @click="approveTeam(team)">
+                    <el-button :icon="Position" :loading="isActionPending(actionKey('team-apply', team.id))" :disabled="currentUser.role === 'admin' || team.unlocked || isActionPending(actionKey('team-apply', team.id))" @click="applyTeam(team)">申请加入</el-button>
+                    <el-button type="primary" plain :loading="isActionPending(actionKey('team-approve', team.applicationId || team.id))" :disabled="!team.applied || team.unlocked || currentUser.role === 'student' || isActionPending(actionKey('team-approve', team.applicationId || team.id))" @click="approveTeam(team)">
                       {{ currentUser.role === 'admin' ? '管理员同意' : '队长同意' }}
                     </el-button>
                     <el-button size="small" type="primary" plain :disabled="!canManageTeam(team)" @click="openTeamEditor(team)">编辑</el-button>
@@ -628,7 +630,7 @@
                   <el-table-column prop="status" label="状态" width="110" />
                   <el-table-column label="操作" width="210">
                     <template #default="{ row }">
-                      <el-button size="small" type="primary" :disabled="row.rawStatus !== 'PENDING'" @click="approveTeamApplication(row)">同意</el-button>
+                      <el-button size="small" type="primary" :loading="isActionPending(actionKey('team-application-approve', row.id))" :disabled="row.rawStatus !== 'PENDING' || isActionPending(actionKey('team-application-approve', row.id))" @click="approveTeamApplication(row)">同意</el-button>
                       <el-button size="small" type="info" plain :disabled="row.rawStatus !== 'PENDING'" @click="rejectTeamApplication(row)">拒绝</el-button>
                       <el-button size="small" type="danger" plain @click="deleteTeamApplication(row)">删除</el-button>
                     </template>
@@ -763,8 +765,8 @@
                 <el-table-column prop="owner" label="提交人" width="120" />
                 <el-table-column label="操作" width="170">
                   <template #default="{ row }">
-                    <el-button size="small" type="success" @click="reviewItem(row, 'APPROVED')">通过</el-button>
-                    <el-button size="small" type="danger" plain @click="reviewItem(row, 'REJECTED')">驳回</el-button>
+                    <el-button size="small" type="success" :loading="isActionPending(actionKey('review-approve', row.id))" :disabled="isActionPending(actionKey('review-approve', row.id)) || isActionPending(actionKey('review-reject', row.id))" @click="reviewItem(row, 'APPROVED')">通过</el-button>
+                    <el-button size="small" type="danger" plain :loading="isActionPending(actionKey('review-reject', row.id))" :disabled="isActionPending(actionKey('review-approve', row.id)) || isActionPending(actionKey('review-reject', row.id))" @click="reviewItem(row, 'REJECTED')">驳回</el-button>
                   </template>
                 </el-table-column>
               </el-table>
@@ -804,7 +806,7 @@
               <el-table-column prop="status" label="状态" width="110" />
               <el-table-column label="操作" width="150">
                 <template #default="{ row }">
-                  <el-button size="small" type="primary" :disabled="row.rawStatus !== 'PENDING'" @click="approveTeamApplication(row)">同意组队</el-button>
+                  <el-button size="small" type="primary" :loading="isActionPending(actionKey('team-application-approve', row.id))" :disabled="row.rawStatus !== 'PENDING' || isActionPending(actionKey('team-application-approve', row.id))" @click="approveTeamApplication(row)">同意组队</el-button>
                   <el-button size="small" type="danger" plain @click="deleteTeamApplication(row)">删除</el-button>
                 </template>
               </el-table-column>
@@ -950,7 +952,7 @@
           </el-form>
           <template #footer>
             <el-button @click="resourceDialogVisible = false">取消</el-button>
-            <el-button type="primary" @click="submitResource">{{ isContentAdmin ? '直接发布' : '提交审核' }}</el-button>
+            <el-button type="primary" :loading="isActionPending('resource-submit')" :disabled="isActionPending('resource-submit')" @click="submitResource">{{ isContentAdmin ? '直接发布' : '提交审核' }}</el-button>
           </template>
         </el-dialog>
 
@@ -974,7 +976,7 @@
           </el-form>
           <template #footer>
             <el-button @click="salonDialogVisible = false">取消</el-button>
-            <el-button type="primary" @click="submitSalon">{{ isContentAdmin ? '直接发布' : '提交审核' }}</el-button>
+            <el-button type="primary" :loading="isActionPending('salon-submit')" :disabled="isActionPending('salon-submit')" @click="submitSalon">{{ isContentAdmin ? '直接发布' : '提交审核' }}</el-button>
           </template>
         </el-dialog>
       </el-main>
@@ -1078,6 +1080,7 @@ const firstLoginDialogVisible = ref(false)
 const passwordDialogVisible = ref(false)
 const passwordChanging = ref(false)
 const isApplyingAuth = ref(false)
+const pendingActions = reactive<Record<string, boolean>>({})
 const commentDrafts = reactive<Record<number, string>>({})
 const blogEditorTab = ref('write')
 const blogEditorMode = ref<'markdown' | 'text'>('markdown')
@@ -1319,6 +1322,55 @@ function escapeHtmlAttribute(value: string) {
   return value.replaceAll('&', '&amp;').replaceAll('"', '&quot;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
 }
 
+function actionKey(prefix: string, id: number | string) {
+  return `${prefix}:${id}`
+}
+
+function isActionPending(key: string) {
+  return Boolean(pendingActions[key])
+}
+
+async function runExclusive<T>(key: string, task: () => Promise<T>): Promise<T | undefined> {
+  if (pendingActions[key]) return undefined
+  pendingActions[key] = true
+  try {
+    return await task()
+  } finally {
+    pendingActions[key] = false
+  }
+}
+
+function absoluteApiUrl(path: string) {
+  if (/^https?:\/\//i.test(path)) return path
+  return path.startsWith(API_BASE) ? path : `${API_BASE}${path.startsWith('/') ? path : `/${path}`}`
+}
+
+async function fetchWithTimeout(input: RequestInfo | URL, init: RequestInit = {}, timeoutMs = 120000) {
+  const controller = new AbortController()
+  const timeout = window.setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    return await fetch(input, { ...init, signal: controller.signal })
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      throw new Error('文件较大或网络较慢，下载响应超时，请稍后重试')
+    }
+    throw error
+  } finally {
+    window.clearTimeout(timeout)
+  }
+}
+
+function formatFileSize(size?: number) {
+  if (!size || size <= 0) return ''
+  const units = ['B', 'KB', 'MB', 'GB']
+  let value = size
+  let unit = 0
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024
+    unit += 1
+  }
+  return `${value.toFixed(value >= 10 || unit === 0 ? 0 : 1)} ${units[unit]}`
+}
 
 async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, {
@@ -1517,6 +1569,7 @@ function navigateTo(view: string) {
   let targetView = routeByView[view] ? view : 'dashboard'
   if (!allowedView(targetView)) targetView = 'dashboard'
   activeView.value = targetView
+  if (targetView === 'admin' && isContentAdmin.value) void loadAdmin()
   const nextPath = pathForView(targetView)
   if (window.location.pathname !== nextPath) window.history.pushState({ view: targetView }, '', nextPath)
 }
@@ -1601,6 +1654,7 @@ async function loadAdmin() {
   const [reviews, pool, appointments] = await Promise.all([
     api<any>(`/admin/reviews?${queryString({ page: reviewPage.current, size: reviewPage.size })}`),
     api<any[]>('/admin/matchmaking'), api<any[]>('/admin/salon-appointments'),
+    loadTeamApplications(),
   ])
   const reviewRecords = Array.isArray(reviews) ? reviews : reviews.records
   reviewPage.total = Array.isArray(reviews) ? reviewRecords.length : reviews.total; reviewPage.current = Array.isArray(reviews) ? reviewPage.current : reviews.current; reviewPage.size = Array.isArray(reviews) ? reviewPage.size : reviews.size
@@ -1666,23 +1720,33 @@ function statusLabel(status: string) { return ({ APPROVED: '已通过', PENDING:
 function typeLabel(type: string) { return ({ resource: '资源', blog: '博客', salon: '沙龙', team: '组队' } as Record<string, string>)[type] || type }
 
 async function downloadResource(resource: ResourceView) {
-  try {
-    const result = await api<{ downloadUrl: string; downloadCount: number }>(`/resources/${resource.id}/download`, { method: 'POST' })
-    const response = await fetch(result.downloadUrl, { headers: token.value ? { Authorization: `Bearer ${token.value}` } : {} })
-    if (!response.ok) { if (response.status === 401 || response.status === 403) throw handleSessionExpired(), Error('登录已过期，请重新登录'); throw Error(await response.text() || '下载失败') }
-    const blob = await response.blob()
-    const url = URL.createObjectURL(blob)
-    const anchor = document.createElement('a')
-    anchor.href = url
-    anchor.download = downloadFileName(response, resource.title)
-    document.body.appendChild(anchor)
-    anchor.click()
-    anchor.remove()
-    window.setTimeout(() => URL.revokeObjectURL(url), 1000)
-    resource.downloads = result.downloadCount; await loadHotResources()
-    ElMessage.success(`开始下载「${resource.title}」`)
-  } catch (error) { ElMessage.error(error instanceof Error ? error.message : '下载失败') }
+  await runExclusive(actionKey('resource-download', resource.id), async () => {
+    let preparing: { close: () => void } | null = null
+    let downloading: { close: () => void } | null = null
+    try {
+      preparing = ElMessage.info({ message: `正在准备下载「${resource.title}」，大文件请耐心等待...`, duration: 0 })
+      const result = await api<{ downloadUrl: string; downloadCount: number; fileName?: string; fileSize?: number; contentType?: string }>(`/resources/${resource.id}/download`, { method: 'POST' })
+      preparing.close(); preparing = null
+      const sizeText = formatFileSize(result.fileSize)
+      downloading = ElMessage.info({ message: `${sizeText ? `${sizeText} 文件` : '文件'}下载中，请不要重复点击`, duration: 0 })
+      const response = await fetchWithTimeout(absoluteApiUrl(result.downloadUrl), { headers: token.value ? { Authorization: `Bearer ${token.value}` } : {} })
+      if (!response.ok) { if (response.status === 401 || response.status === 403) throw handleSessionExpired(), Error('登录已过期，请重新登录'); throw Error(await response.text() || '下载失败') }
+      const blob = await response.blob()
+      const url = URL.createObjectURL(blob)
+      const anchor = document.createElement('a')
+      anchor.href = url
+      anchor.download = downloadFileName(response, result.fileName || resource.title)
+      document.body.appendChild(anchor)
+      anchor.click()
+      anchor.remove()
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+      resource.downloads = result.downloadCount; await loadHotResources()
+      ElMessage.success(`已开始下载「${resource.title}」`)
+    } catch (error) { ElMessage.error(error instanceof Error ? error.message : '下载失败') }
+    finally { preparing?.close(); downloading?.close() }
+  })
 }
+
 function downloadFileName(response: Response, fallback: string) {
   const disposition = response.headers.get('Content-Disposition') || response.headers.get('content-disposition') || ''
   const encoded = disposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1]
@@ -1700,29 +1764,34 @@ function handleResourceEditFileChange(event: Event) {
 }
 async function saveResourceEdit() {
   if (!resourceEditor.id) return
-  try {
-    const formData = new FormData()
-    formData.append('title', resourceEditor.title)
-    formData.append('contest', resourceEditor.contest)
-    formData.append('type', resourceEditor.type)
-    formData.append('summary', resourceEditor.summary)
-    if (resourceEditFile.value) formData.append('file', resourceEditFile.value)
-    const response = await fetch(`${API_BASE}/resources/${resourceEditor.id}/upload`, {
-      method: 'PUT',
-      headers: token.value ? { Authorization: `Bearer ${token.value}` } : {},
-      body: formData,
-    })
-    if (!response.ok) { if (response.status === 401 || response.status === 403) throw handleSessionExpired(), Error('登录已过期，请重新登录'); throw Error(await response.text() || '编辑资源失败') }
-    resourceEditorVisible.value = false; resourceEditFile.value = null; await Promise.all([loadResources(), loadOverview()])
-    ElMessage.success('资源已更新')
-  } catch (error) { ElMessage.error(error instanceof Error ? error.message : '编辑资源失败，只有上传者或管理员可以编辑') }
+  await runExclusive('resource-edit', async () => {
+    try {
+      const formData = new FormData()
+      formData.append('title', resourceEditor.title)
+      formData.append('contest', resourceEditor.contest)
+      formData.append('type', resourceEditor.type)
+      formData.append('summary', resourceEditor.summary)
+      if (resourceEditFile.value) formData.append('file', resourceEditFile.value)
+      const response = await fetch(`${API_BASE}/resources/${resourceEditor.id}/upload`, {
+        method: 'PUT',
+        headers: token.value ? { Authorization: `Bearer ${token.value}` } : {},
+        body: formData,
+      })
+      if (!response.ok) { if (response.status === 401 || response.status === 403) throw handleSessionExpired(), Error('登录已过期，请重新登录'); throw Error(await response.text() || '编辑资源失败') }
+      resourceEditorVisible.value = false; resourceEditFile.value = null; await Promise.all([loadResources(), loadOverview()])
+      ElMessage.success('资源已更新')
+    } catch (error) { ElMessage.error(error instanceof Error ? error.message : '编辑资源失败，只有上传者或管理员可以编辑') }
+  })
 }
+
 async function deleteResource(resource: ResourceView) {
-  try {
-    await api(`/resources/${resource.id}`, { method: 'DELETE' })
-    await Promise.all([loadResources(), loadHotResources(), loadOverview(), isContentAdmin.value ? loadAdmin() : Promise.resolve()])
-    ElMessage.success(`资源已删除：${resource.title}`)
-  } catch (error) { ElMessage.error(error instanceof Error ? error.message : '删除资源失败，只有上传者或管理员可以删除') }
+  await runExclusive(actionKey('resource-delete', resource.id), async () => {
+    try {
+      await api(`/resources/${resource.id}`, { method: 'DELETE' })
+      await Promise.all([loadResources(), loadHotResources(), loadOverview(), isContentAdmin.value ? loadAdmin() : Promise.resolve()])
+      ElMessage.success(`资源已删除：${resource.title}`)
+    } catch (error) { ElMessage.error(error instanceof Error ? error.message : '删除资源失败，只有上传者或管理员可以删除') }
+  })
 }
 async function deleteSelectedResources() {
   if (selectedResourceIds.value.length === 0) return
@@ -1764,31 +1833,34 @@ async function submitResource() {
     ElMessage.warning('请填写完整的资源信息')
     return
   }
-  try {
-    const formData = new FormData()
-    formData.append('title', resourceForm.title.trim())
-    formData.append('contest', resourceForm.contest.trim())
-    formData.append('type', resourceForm.type.trim())
-    formData.append('summary', resourceForm.summary.trim())
-    formData.append('file', resourceFile.value)
-    const response = await fetch(`${API_BASE}/resources/upload`, {
-      method: 'POST',
-      headers: token.value ? { Authorization: `Bearer ${token.value}` } : {},
-      body: formData,
-    })
-    if (!response.ok) {
-      if (response.status === 401 || response.status === 403) {
-        handleSessionExpired()
-        throw new Error('登录已过期，请重新登录')
+  await runExclusive('resource-submit', async () => {
+    try {
+      const formData = new FormData()
+      formData.append('title', resourceForm.title.trim())
+      formData.append('contest', resourceForm.contest.trim())
+      formData.append('type', resourceForm.type.trim())
+      formData.append('summary', resourceForm.summary.trim())
+      formData.append('file', resourceFile.value as File)
+      const response = await fetch(`${API_BASE}/resources/upload`, {
+        method: 'POST',
+        headers: token.value ? { Authorization: `Bearer ${token.value}` } : {},
+        body: formData,
+      })
+      if (!response.ok) {
+        if (response.status === 401 || response.status === 403) {
+          handleSessionExpired()
+          throw new Error('登录已过期，请重新登录')
+        }
+        throw new Error(await response.text() || '创建资源失败')
       }
-      throw new Error(await response.text() || '创建资源失败')
-    }
-    resourceDialogVisible.value = false
-    resourceFile.value = null
-    await Promise.all([loadResources(), loadOverview(), isContentAdmin.value ? loadAdmin() : Promise.resolve()])
-    ElMessage.success(isContentAdmin.value ? '资源已发布' : '资源已提交审核，等待管理员审核通过后公开')
-  } catch (error) { ElMessage.error(error instanceof Error ? error.message : '创建资源失败') }
+      resourceDialogVisible.value = false
+      resourceFile.value = null
+      await Promise.all([loadResources(), loadOverview(), isContentAdmin.value ? loadAdmin() : Promise.resolve()])
+      ElMessage.success(isContentAdmin.value ? '资源已发布' : '资源已提交审核，等待管理员审核通过后公开')
+    } catch (error) { ElMessage.error(error instanceof Error ? error.message : '创建资源失败') }
+  })
 }
+
 
 function insertBlogImage() {
   const imageUrl = draftBlog.imageUrl.trim() || '/system-map.png'
@@ -1861,15 +1933,18 @@ async function restoreBlogDetailFromRoute() {
   }
 }
 async function publishBlog() {
-  try {
-    const imageUrl = draftBlog.imageUrl.trim()
-    const content = imageUrl && !draftBlog.content.includes(imageUrl) ? `${draftBlog.content.trim()}\n\n![竞赛经验图](${imageUrl})` : draftBlog.content
-    const path = editingBlogId.value ? `/blogs/${editingBlogId.value}` : '/blogs'
-    await api(path, { method: editingBlogId.value ? 'PUT' : 'POST', body: JSON.stringify({ title: draftBlog.title, content, contestTag: draftBlog.contestTag, anonymous: draftBlog.anonymous, visibility: draftBlog.visibility.toUpperCase(), commentsOpen: draftBlog.commentsOpen }) })
-    await Promise.all([loadBlogs(), loadOverview(), isContentAdmin.value ? loadAdmin() : Promise.resolve()])
-    navigateTo('blog'); ElMessage.success(isContentAdmin.value ? '博客已发布' : '博客已提交审核，等待管理员审核通过后公开')
-  } catch (error) { ElMessage.error(error instanceof Error ? error.message : '发布博客失败') }
+  await runExclusive('blog-publish', async () => {
+    try {
+      const imageUrl = draftBlog.imageUrl.trim()
+      const content = imageUrl && !draftBlog.content.includes(imageUrl) ? `${draftBlog.content.trim()}\n\n![竞赛经验图](${imageUrl})` : draftBlog.content
+      const path = editingBlogId.value ? `/blogs/${editingBlogId.value}` : '/blogs'
+      await api(path, { method: editingBlogId.value ? 'PUT' : 'POST', body: JSON.stringify({ title: draftBlog.title, content, contestTag: draftBlog.contestTag, anonymous: draftBlog.anonymous, visibility: draftBlog.visibility.toUpperCase(), commentsOpen: draftBlog.commentsOpen }) })
+      await Promise.all([loadBlogs(), loadOverview(), isContentAdmin.value ? loadAdmin() : Promise.resolve()])
+      navigateTo('blog'); ElMessage.success(isContentAdmin.value ? '博客已发布' : '博客已提交审核，等待管理员审核通过后公开')
+    } catch (error) { ElMessage.error(error instanceof Error ? error.message : '发布博客失败') }
+  })
 }
+
 async function deleteBlog(post: BlogView) {
   try {
     await confirmAction(`确定要删除博客「${post.title}」吗？`)
@@ -1925,21 +2000,27 @@ async function submitSalon() {
     ElMessage.warning('请填写完整的沙龙信息')
     return
   }
-  try {
-    await api('/salons', { method: 'POST', body: JSON.stringify({ ...salonForm }) })
-    salonDialogVisible.value = false
-    await Promise.all([loadSalons(), loadOverview(), isContentAdmin.value ? loadAdmin() : Promise.resolve()])
-    ElMessage.success(isContentAdmin.value ? '沙龙已发布，已开放预约' : '沙龙已提交审核，等待管理员审核通过后开放预约')
-  } catch (error) { ElMessage.error(error instanceof Error ? error.message : '创建沙龙失败') }
+  await runExclusive('salon-submit', async () => {
+    try {
+      await api('/salons', { method: 'POST', body: JSON.stringify({ ...salonForm }) })
+      salonDialogVisible.value = false
+      await Promise.all([loadSalons(), loadOverview(), isContentAdmin.value ? loadAdmin() : Promise.resolve()])
+      ElMessage.success(isContentAdmin.value ? '沙龙已发布，已开放预约' : '沙龙已提交审核，等待管理员审核通过后开放预约')
+    } catch (error) { ElMessage.error(error instanceof Error ? error.message : '创建沙龙失败') }
+  })
 }
+
 async function bookSalon(salon: SalonView) {
   if (salon.booked >= salon.capacity || bookedSalonIds.value.includes(salon.id)) return
-  try {
-    await api(`/salons/${salon.id}/book`, { method: 'POST' })
-    await Promise.all([loadSalons(), loadBookings()])
-    ElMessage.success(`预约成功！「${salon.title}」凭证已生成，请在个人中心查看`)
-  } catch (error) { ElMessage.error(error instanceof Error ? error.message : '预约失败') }
+  await runExclusive(actionKey('salon-book', salon.id), async () => {
+    try {
+      await api(`/salons/${salon.id}/book`, { method: 'POST' })
+      await Promise.all([loadSalons(), loadBookings()])
+      ElMessage.success(`预约成功！「${salon.title}」凭证已生成，请在个人中心查看`)
+    } catch (error) { ElMessage.error(error instanceof Error ? error.message : '预约失败') }
+  })
 }
+
 function canManageSalon(salon: SalonView) { return isContentAdmin.value || salon.speakerId === currentUser.value.id }
 async function deleteSalon(salon: SalonView) {
   try {
@@ -1951,34 +2032,46 @@ async function deleteSalon(salon: SalonView) {
 }
 
 async function publishTeam() {
-  try {
-    await api('/teams', { method: 'POST', body: JSON.stringify({ title: draftTeam.title, contest: '自定义竞赛', need: draftTeam.need, skills: [...draftTeam.skills] }) })
-    await Promise.all([loadTeams(), loadOverview(), isContentAdmin.value ? loadAdmin() : Promise.resolve()])
-    ElMessage.success(isContentAdmin.value ? '组队卡片已发布，联系方式默认隐藏' : '组队卡片已提交审核，等待管理员审核')
-  } catch (error) { ElMessage.error(error instanceof Error ? error.message : '发布组队失败') }
+  await runExclusive('team-publish', async () => {
+    try {
+      await api('/teams', { method: 'POST', body: JSON.stringify({ title: draftTeam.title, contest: '自定义竞赛', need: draftTeam.need, skills: [...draftTeam.skills] }) })
+      await Promise.all([loadTeams(), loadOverview(), isContentAdmin.value ? loadAdmin() : Promise.resolve()])
+      ElMessage.success(isContentAdmin.value ? '组队卡片已发布，联系方式默认隐藏' : '组队卡片已提交审核，等待管理员审核')
+    } catch (error) { ElMessage.error(error instanceof Error ? error.message : '发布组队失败') }
+  })
 }
+
 async function applyTeam(team: TeamView) {
-  try {
-    const data = await api<any>(`/teams/${team.id}/apply`, { method: 'POST' })
-    team.applied = true; team.applicationId = data.application?.id; teamStep.value = 1; await loadTeams()
-    ElMessage.info('申请已发送，等待队长同意后联系方式才会解锁')
-  } catch (error) { ElMessage.error(error instanceof Error ? error.message : '申请失败') }
+  await runExclusive(actionKey('team-apply', team.id), async () => {
+    try {
+      const data = await api<any>(`/teams/${team.id}/apply`, { method: 'POST' })
+      team.applied = true; team.applicationId = data.application?.id; teamStep.value = 1; await loadTeams()
+      ElMessage.info('申请已发送，等待队长同意后联系方式才会解锁')
+    } catch (error) { ElMessage.error(error instanceof Error ? error.message : '申请失败') }
+  })
 }
+
 async function approveTeam(team: TeamView) {
   if (!team.applicationId) return
-  try {
-    await api(`/teams/${team.id}/applications/${team.applicationId}/approve`, { method: 'POST' })
-    await Promise.all([loadTeams(), loadOverview()]); teamStep.value = 3
-    ElMessage.success('队长已同意，系统已双向解锁联系方式')
-  } catch (error) { ElMessage.error(error instanceof Error ? error.message : '同意失败，请检查队长身份') }
+  await runExclusive(actionKey('team-approve', team.applicationId), async () => {
+    try {
+      await api(`/teams/${team.id}/applications/${team.applicationId}/approve`, { method: 'POST' })
+      await Promise.all([loadTeams(), loadOverview()]); teamStep.value = 3
+      ElMessage.success('队长已同意，系统已双向解锁联系方式')
+    } catch (error) { ElMessage.error(error instanceof Error ? error.message : '同意失败，请检查队长身份') }
+  })
 }
+
 async function approveTeamApplication(application: TeamApplicationView) {
-  try {
-    await api(`/teams/${application.teamId}/applications/${application.id}/approve`, { method: 'POST' })
-    await Promise.all([loadTeams(), loadOverview()]); teamStep.value = 3
-    ElMessage.success('已同意加入，双方联系方式已解锁')
-  } catch (error) { ElMessage.error(error instanceof Error ? error.message : '同意失败，请检查队长身份') }
+  await runExclusive(actionKey('team-application-approve', application.id), async () => {
+    try {
+      await api(`/teams/${application.teamId}/applications/${application.id}/approve`, { method: 'POST' })
+      await Promise.all([loadTeams(), loadOverview()]); teamStep.value = 3
+      ElMessage.success('已同意加入，双方联系方式已解锁')
+    } catch (error) { ElMessage.error(error instanceof Error ? error.message : '同意失败，请检查队长身份') }
+  })
 }
+
 function selectManageableApplications(rows: any[]) { selectedManageableApplicationIds.value = rows.filter(r => r.rawStatus === 'PENDING').map(r => r.id); selectedManageableApplicationDeleteIds.value = rows.map(r => r.id) }
 function selectAdminApplications(rows: any[]) { selectedAdminApplicationIds.value = rows.filter(r => r.rawStatus === 'PENDING').map(r => r.id); selectedAdminApplicationDeleteIds.value = rows.map(r => r.id) }
 async function approveSelectedManageableApplications() { await batchApproveApplications(selectedManageableApplicationIds.value, '我的申请') }
@@ -2058,12 +2151,16 @@ async function exportSalonAppointments() {
   } catch (error) { ElMessage.error(error instanceof Error ? error.message : '导出预约数据失败') }
 }
 async function reviewItem(row: ReviewView, status: 'APPROVED' | 'REJECTED') {
-  try {
-    await api(`/admin/reviews/${row.id}`, { method: 'PATCH', body: JSON.stringify({ status }) })
-    await Promise.all([loadAdmin(), loadResources(), loadBlogs(), loadSalons(), loadTeams(), loadOverview()])
-    ElMessage.success(`审核状态已更新为：${status === 'APPROVED' ? '已通过' : '已驳回'}`)
-  } catch (error) { ElMessage.error(error instanceof Error ? error.message : '审核失败') }
+  const key = actionKey(status === 'APPROVED' ? 'review-approve' : 'review-reject', row.id)
+  await runExclusive(key, async () => {
+    try {
+      await api(`/admin/reviews/${row.id}`, { method: 'PATCH', body: JSON.stringify({ status }) })
+      await Promise.all([loadAdmin(), loadResources(), loadBlogs(), loadSalons(), loadTeams(), loadOverview()])
+      ElMessage.success(`审核状态已更新为：${status === 'APPROVED' ? '已通过' : '已驳回'}`)
+    } catch (error) { ElMessage.error(error instanceof Error ? error.message : '审核失败') }
+  })
 }
+
 function selectReviews(rows: any[]) { selectedReviewIds.value = rows.map(r => r.id) }
 async function deleteSelectedReviews() {
   if (selectedReviewIds.value.length === 0) return

@@ -10,6 +10,7 @@ import com.competition.hub.entity.SalonAppointment;
 import com.competition.hub.mapper.SalonAppointmentMapper;
 import com.competition.hub.mapper.SalonMapper;
 import com.competition.hub.service.SalonService;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -99,8 +100,12 @@ public class SalonServiceImpl extends ServiceImpl<SalonMapper, Salon> implements
                 .updatedAt(now)
                 .deleted(0)
                 .build();
-        appointmentMapper.insert(appointment);
-        return appointment;
+        try {
+            appointmentMapper.insert(appointment);
+            return appointment;
+        } catch (DuplicateKeyException error) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "你已经预约过该沙龙");
+        }
     }
 
     @Override

@@ -11,6 +11,7 @@ import com.competition.hub.mapper.TeamApplicationMapper;
 import com.competition.hub.mapper.TeamMapper;
 import com.competition.hub.mapper.TeamMemberMapper;
 import com.competition.hub.service.TeamService;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -121,8 +122,18 @@ public class TeamServiceImpl extends ServiceImpl<TeamMapper, Team> implements Te
                 .updatedAt(now)
                 .deleted(0)
                 .build();
-        teamApplicationMapper.insert(application);
-        return application;
+        try {
+            teamApplicationMapper.insert(application);
+            return application;
+        } catch (DuplicateKeyException error) {
+            TeamApplication duplicate = teamApplicationMapper.selectOne(new LambdaQueryWrapper<TeamApplication>()
+                    .eq(TeamApplication::getTeamId, teamId)
+                    .eq(TeamApplication::getApplicantId, applicantId));
+            if (duplicate != null) {
+                return duplicate;
+            }
+            throw error;
+        }
     }
 
     @Override
@@ -334,7 +345,7 @@ public class TeamServiceImpl extends ServiceImpl<TeamMapper, Team> implements Te
         return leaderMemberCount != null && leaderMemberCount > 0;
     }
 
-    private List<Long> manageableTeamIds(Long operatorId, boolean operatorIsAdmin) {
+    protected List<Long> manageableTeamIds(Long operatorId, boolean operatorIsAdmin) {
         if (operatorIsAdmin) {
             return list(new LambdaQueryWrapper<Team>()
                     .select(Team::getId))
@@ -342,11 +353,20 @@ public class TeamServiceImpl extends ServiceImpl<TeamMapper, Team> implements Te
                     .map(Team::getId)
                     .toList();
         }
-        List<Long> leaderTeamIds = teamMemberMapper.selectList(new LambdaQueryWrapper<TeamMember>()
+        List<Long> ownedTeamIds = list(new LambdaQueryWrapper<Team>()
+                .select(Team::getId)
+                .eq(Team::getLeaderId, operatorId))
+                .stream()
+                .map(Team::getId)
+                .toList();
+        List<Long> memberLeaderTeamIds = teamMemberMapper.selectList(new LambdaQueryWrapper<TeamMember>()
                         .eq(TeamMember::getUserId, operatorId)
                         .eq(TeamMember::getMemberRole, "LEADER"))
                 .stream()
                 .map(TeamMember::getTeamId)
+                .toList();
+        List<Long> leaderTeamIds = java.util.stream.Stream.concat(ownedTeamIds.stream(), memberLeaderTeamIds.stream())
+                .distinct()
                 .toList();
         if (leaderTeamIds.isEmpty()) {
             return List.of();
