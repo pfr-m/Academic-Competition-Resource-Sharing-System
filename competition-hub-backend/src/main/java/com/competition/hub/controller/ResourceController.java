@@ -280,11 +280,14 @@ public class ResourceController {
                     .filename(item.getOriginalFileName(), java.nio.charset.StandardCharsets.UTF_8)
                     .build()
                     .toString();
+            long contentLength = Files.size(filePath);
             return ResponseEntity.ok()
                     .header(HttpHeaders.CONTENT_DISPOSITION, contentDisposition)
                     .contentType(mediaType)
-                    .contentLength(Files.size(filePath))
+                    .contentLength(contentLength)
                     .body(resource);
+        } catch (IOException error) {
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "文件读取失败");
         } catch (MalformedURLException error) {
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "文件读取失败");
         }
