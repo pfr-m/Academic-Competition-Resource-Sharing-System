@@ -288,8 +288,6 @@ public class ResourceController {
                     .body(resource);
         } catch (IOException error) {
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "文件读取失败");
-        } catch (MalformedURLException error) {
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "文件读取失败");
         }
     }
 
