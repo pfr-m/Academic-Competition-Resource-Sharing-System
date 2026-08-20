@@ -1380,10 +1380,7 @@ async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
   if (!response.ok) {
     if (response.status === 401) { handleSessionExpired(); throw new Error('登录已过期，请重新登录') }
     const text = await response.text()
-    if (response.status === 403 && !text.trim()) {
-      handleSessionExpired()
-      throw new Error('登录已过期或权限已变更，请重新登录')
-    }
+    if (response.status === 403) throw new Error(text || '没有权限执行该操作')
     throw new Error(text || `${response.status} ${response.statusText}`)
   }
   return response.json() as Promise<T>
@@ -1520,12 +1517,15 @@ function goBack() { window.history.back() }
 function handleUserCommand(command: string) { if (command === 'logout') { logout(); return }; if (command === 'profile') navigateTo('profile') }
 
 async function refreshAll() {
-  await Promise.all([
+  const results = await Promise.allSettled([
     loadOverview(), loadCreatorStats(), loadResources(), loadHotResources(), loadBlogs(), loadSalons(), loadBookings(), loadTeams(),
     isContentAdmin.value ? loadAdmin() : Promise.resolve(),
     isContentAdmin.value ? loadManagedUsers() : Promise.resolve(),
     isSuperAdmin.value ? loadAdminUsers() : Promise.resolve(),
   ])
+  results.forEach((result) => {
+    if (result.status === 'rejected') console.warn('刷新数据失败', result.reason)
+  })
 }
 
 async function restoreSession() {
