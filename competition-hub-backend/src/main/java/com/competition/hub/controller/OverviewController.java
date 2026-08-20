@@ -31,7 +31,7 @@ public class OverviewController {
     @GetMapping
     public Map<String, Long> overview() {
         return Map.of(
-                "resources", resourceService.count(),
+                "resources", resourceService.countApproved(),
                 "blogs", blogService.count(),
                 "salons", salonService.count(),
                 "teams", teamService.count(),

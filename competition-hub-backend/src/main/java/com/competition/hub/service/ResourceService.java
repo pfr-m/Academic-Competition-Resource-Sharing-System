@@ -11,6 +11,8 @@ public interface ResourceService extends IService<Resource> {
 
     IPage<Resource> pageApproved(long current, long size, String keyword, String contest, String type);
 
+    long countApproved();
+
     Resource createResource(Resource resource);
 
     Resource increaseDownloadCount(Long id);

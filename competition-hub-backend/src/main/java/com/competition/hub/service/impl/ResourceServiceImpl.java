@@ -28,6 +28,11 @@ public class ResourceServiceImpl extends ServiceImpl<ResourceMapper, Resource> i
         return page(Page.of(current, size), approvedWrapper(keyword, contest, type));
     }
 
+    @Override
+    public long countApproved() {
+        return count(approvedWrapper(null, null, null));
+    }
+
     private LambdaQueryWrapper<Resource> approvedWrapper(String keyword, String contest, String type) {
         LambdaQueryWrapper<Resource> wrapper = new LambdaQueryWrapper<Resource>()
                 .eq(Resource::getStatus, "APPROVED");

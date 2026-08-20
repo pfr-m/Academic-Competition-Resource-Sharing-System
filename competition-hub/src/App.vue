@@ -1569,6 +1569,7 @@ function navigateTo(view: string) {
   let targetView = routeByView[view] ? view : 'dashboard'
   if (!allowedView(targetView)) targetView = 'dashboard'
   activeView.value = targetView
+  if (targetView === 'dashboard') void loadOverview()
   if (targetView === 'admin' && isContentAdmin.value) void loadAdmin()
   const nextPath = pathForView(targetView)
   if (window.location.pathname !== nextPath) window.history.pushState({ view: targetView }, '', nextPath)
@@ -1577,6 +1578,7 @@ function syncViewFromLocation() {
   const routeView = viewFromLocation()
   const nextView = allowedView(routeView) ? routeView : 'dashboard'
   activeView.value = nextView
+  if (nextView === 'dashboard') void loadOverview()
   if (nextView === 'blogDetail') void restoreBlogDetailFromRoute()
   if (nextView !== routeView && window.location.pathname !== pathForView(nextView)) {
     window.history.replaceState({ view: nextView }, '', pathForView(nextView))
