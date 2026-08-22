@@ -990,6 +990,7 @@ import hljs from 'highlight.js'
 import 'highlight.js/styles/github-dark.css'
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { runMutationAndRefresh } from './operationRefresh'
 import {
   ArrowLeft,
   ArrowDown,
@@ -1069,7 +1070,6 @@ const selectedManageableApplicationIds = ref<number[]>([])
 const selectedManageableApplicationDeleteIds = ref<number[]>([])
 const selectedAdminApplicationIds = ref<number[]>([])
 const selectedAdminApplicationDeleteIds = ref<number[]>([])
-const token = ref(localStorage.getItem(TOKEN_KEY) || '')
 const loggedInUser = ref<any>(null)
 const loading = ref(false)
 const codeSending = ref(false)
@@ -1117,7 +1117,7 @@ const registerForm = reactive({ studentNo: '', nickname: '', phone: '', email: '
 const resetPasswordForm = reactive({ email: '', code: '', newPassword: '' })
 const passwordForm = reactive({ oldPassword: '', newPassword: '', confirmPassword: '' })
 
-const isLoggedIn = computed(() => Boolean(token.value))
+const isLoggedIn = computed(() => Boolean(loggedInUser.value))
 const isSuperAdmin = computed(() => currentUser.value.role === 'superAdmin')
 const isContentAdmin = computed(() => currentUser.value.role === 'admin' || currentUser.value.role === 'superAdmin')
 const currentUser = computed(() => {
@@ -1375,7 +1375,8 @@ function formatFileSize(size?: number) {
 async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, {
     ...options,
-    headers: { 'Content-Type': 'application/json', ...(token.value ? { Authorization: `Bearer ${token.value}` } : {}), ...(options.headers || {}) },
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
   })
   if (!response.ok) {
     if (response.status === 401) { handleSessionExpired(); throw new Error('登录已过期，请重新登录') }
@@ -1386,13 +1387,17 @@ async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
   return response.json() as Promise<T>
 }
 
-function clearAuthStorage() {
-  token.value = ''; loggedInUser.value = null
+async function clearAuthStorage() {
+  loggedInUser.value = null
   localStorage.removeItem(TOKEN_KEY); localStorage.removeItem(ROLE_KEY)
   sessionStorage.removeItem(TOKEN_KEY); sessionStorage.removeItem(ROLE_KEY)
+  // 通知后端清除 httpOnly cookie（fire-and-forget，失败不阻塞登出）
+  try {
+    await fetch(`${API_BASE}/auth/logout`, { method: 'POST', credentials: 'include' })
+  } catch { /* 忽略网络错误，本地状态已清除 */ }
 }
 function handleSessionExpired() {
-  if (sessionExpiredNotified) return; sessionExpiredNotified = true; clearAuthStorage()
+  if (sessionExpiredNotified) return; sessionExpiredNotified = true; void clearAuthStorage()
   ElMessage.warning('登录已过期，请重新登录')
   window.setTimeout(() => { window.location.href = '/login' }, 500)
 }
@@ -1405,8 +1410,8 @@ async function loginAndLoad() {
   if (!validatePassword(loginForm.password)) { ElMessage.warning('密码需为 6-18 位字母与数字组合'); return }
   loading.value = true
   try {
-    const login = await fetch(`${API_BASE}/auth/login`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
+const login = await fetch(`${API_BASE}/auth/login`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
       body: JSON.stringify({ username: loginForm.username, password: loginForm.password }),
     })
     if (!login.ok) throw new Error(await resolveLoginError(login))
@@ -1438,7 +1443,7 @@ async function sendEmailCode() {
   if (!registerForm.email) { ElMessage.warning('请填写邮箱'); return }
   codeSending.value = true
   try {
-    const response = await fetch(`${API_BASE}/auth/email/code`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: registerForm.email }) })
+const response = await fetch(`${API_BASE}/auth/email/code`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ email: registerForm.email }) })
     if (!response.ok) throw new Error(await response.text() || '验证码发送失败')
     ElMessage.success('验证码已发送至您的邮箱，有效时间 5 分钟')
   } catch (error) { ElMessage.error(error instanceof Error ? error.message : '验证码发送失败') }
@@ -1449,7 +1454,7 @@ async function sendResetPasswordCode() {
   if (!resetPasswordForm.email) { ElMessage.warning('请填写注册邮箱'); return }
   resetCodeSending.value = true
   try {
-    const response = await fetch(`${API_BASE}/auth/email/code`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: resetPasswordForm.email }) })
+const response = await fetch(`${API_BASE}/auth/email/code`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ email: resetPasswordForm.email }) })
     if (!response.ok) throw new Error(await response.text() || '验证码发送失败')
     ElMessage.success('验证码已发送至您的邮箱，有效时间 5 分钟')
   } catch (error) { ElMessage.error(error instanceof Error ? error.message : '验证码发送失败') }
@@ -1460,7 +1465,7 @@ async function resetPassword() {
   if (!validatePassword(resetPasswordForm.newPassword)) { ElMessage.warning('密码需为 6-18 位字母与数字组合'); return }
   resettingPassword.value = true
   try {
-    const response = await fetch(`${API_BASE}/auth/reset-password`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(resetPasswordForm) })
+    const response = await fetch(`${API_BASE}/auth/reset-password`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(resetPasswordForm) })
     if (!response.ok) throw new Error(await response.text() || '密码重置失败')
     resetPasswordVisible.value = false; resetPasswordForm.code = ''; resetPasswordForm.newPassword = ''
     ElMessage.success('密码已重置，请使用新密码登录')
@@ -1472,7 +1477,7 @@ async function registerByEmail() {
   if (!validatePassword(registerForm.password)) { ElMessage.warning('密码需为 6-18 位字母与数字组合'); return }
   loading.value = true
   try {
-    const response = await fetch(`${API_BASE}/auth/register`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(registerForm) })
+    const response = await fetch(`${API_BASE}/auth/register`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(registerForm) })
     if (!response.ok) throw new Error(await response.text() || '注册失败')
     await applyLoginResult(await response.json())
     ElMessage.success('注册成功，已自动登录')
@@ -1497,16 +1502,17 @@ async function changePassword() {
 }
 
 async function applyLoginResult(data: any) {
-  token.value = data.accessToken; loggedInUser.value = data.user
+  // token 由后端通过 httpOnly cookie 下发，前端不持久化 token
+  loggedInUser.value = data.user
   const role = normalizeRole(data.user?.role)
   isApplyingAuth.value = true; selectedRole.value = role; isApplyingAuth.value = false
-  localStorage.setItem(TOKEN_KEY, token.value); localStorage.setItem(ROLE_KEY, selectedRole.value)
+  localStorage.setItem(ROLE_KEY, selectedRole.value)
   if (data.firstLoginPrompted === false && role === 'superAdmin') firstLoginDialogVisible.value = true
   await refreshAll()
 }
 
 function logout() {
-  firstLoginDialogVisible.value = false; clearAuthStorage()
+  firstLoginDialogVisible.value = false; void clearAuthStorage()
   bookedSalonIds.value = []; bookedSalons.value = []; resources.splice(0, resources.length); blogs.splice(0, blogs.length)
   salons.splice(0, salons.length); teams.splice(0, teams.length); reviewQueue.splice(0, reviewQueue.length)
   salonAppointments.splice(0, salonAppointments.length); candidates.splice(0, candidates.length)
@@ -1529,7 +1535,7 @@ async function refreshAll() {
 }
 
 async function restoreSession() {
-  if (!token.value) return
+  // token 由 httpOnly cookie 承载，前端读不到；直接调用 /users/me 验证 cookie 是否有效
   try {
     const user = await api<any>('/users/me')
     loggedInUser.value = user
@@ -1731,7 +1737,7 @@ async function downloadResource(resource: ResourceView) {
       preparing.close(); preparing = null
       const sizeText = formatFileSize(result.fileSize)
       downloading = ElMessage.info({ message: `${sizeText ? `${sizeText} 文件` : '文件'}下载中，请不要重复点击`, duration: 0 })
-      const response = await fetchWithTimeout(absoluteApiUrl(result.downloadUrl), { headers: token.value ? { Authorization: `Bearer ${token.value}` } : {} })
+      const response = await fetchWithTimeout(absoluteApiUrl(result.downloadUrl), { credentials: 'include' })
       if (!response.ok) { if (response.status === 401 || response.status === 403) throw handleSessionExpired(), Error('登录已过期，请重新登录'); throw Error(await response.text() || '下载失败') }
       const blob = await response.blob()
       const url = URL.createObjectURL(blob)
@@ -1774,13 +1780,18 @@ async function saveResourceEdit() {
       formData.append('type', resourceEditor.type)
       formData.append('summary', resourceEditor.summary)
       if (resourceEditFile.value) formData.append('file', resourceEditFile.value)
-      const response = await fetch(`${API_BASE}/resources/${resourceEditor.id}/upload`, {
+const response = await fetch(`${API_BASE}/resources/${resourceEditor.id}/upload`, {
         method: 'PUT',
-        headers: token.value ? { Authorization: `Bearer ${token.value}` } : {},
+        credentials: 'include',
         body: formData,
       })
       if (!response.ok) { if (response.status === 401 || response.status === 403) throw handleSessionExpired(), Error('登录已过期，请重新登录'); throw Error(await response.text() || '编辑资源失败') }
-      resourceEditorVisible.value = false; resourceEditFile.value = null; await Promise.all([loadResources(), loadOverview()])
+      resourceEditorVisible.value = false; resourceEditFile.value = null
+      const { refreshFailed } = await runMutationAndRefresh(
+        async () => undefined,
+        [loadResources, loadOverview, loadHotResources, isContentAdmin.value ? loadAdmin : async () => undefined],
+      )
+      if (refreshFailed) ElMessage.warning('资源已更新，部分页面数据刷新失败，请稍后手动刷新')
       ElMessage.success('资源已更新')
     } catch (error) { ElMessage.error(error instanceof Error ? error.message : '编辑资源失败，只有上传者或管理员可以编辑') }
   })
@@ -1789,19 +1800,46 @@ async function saveResourceEdit() {
 async function deleteResource(resource: ResourceView) {
   await runExclusive(actionKey('resource-delete', resource.id), async () => {
     try {
-      await api(`/resources/${resource.id}`, { method: 'DELETE' })
-      await Promise.all([loadResources(), loadHotResources(), loadOverview(), isContentAdmin.value ? loadAdmin() : Promise.resolve()])
+      const { refreshFailed } = await runMutationAndRefresh(
+        async () => {
+          await api(`/resources/${resource.id}`, { method: 'DELETE' })
+
+          // 删除接口已成功，先移除当前页面数据，避免刷新失败留下已删除的卡片。
+          const resourceIndex = resources.findIndex((item) => item.id === resource.id)
+          if (resourceIndex >= 0) {
+            resources.splice(resourceIndex, 1)
+            resourcePage.total = Math.max(0, resourcePage.total - 1)
+          }
+          const hotResourceIndex = hotResources.findIndex((item) => item.id === resource.id)
+          if (hotResourceIndex >= 0) hotResources.splice(hotResourceIndex, 1)
+        },
+        [loadResources, loadHotResources, loadOverview, isContentAdmin.value ? loadAdmin : async () => undefined],
+      )
       ElMessage.success(`资源已删除：${resource.title}`)
-    } catch (error) { ElMessage.error(error instanceof Error ? error.message : '删除资源失败，只有上传者或管理员可以删除') }
+      if (refreshFailed) ElMessage.warning('资源已删除，部分页面数据刷新失败，请稍后手动刷新')
+    } catch (error) {
+      ElMessage.error(error instanceof Error ? error.message : '删除资源失败，只有上传者或管理员可以删除')
+    }
   })
 }
 async function deleteSelectedResources() {
   if (selectedResourceIds.value.length === 0) return
   try {
     await confirmAction(`确定要批量删除选中的 ${selectedResourceIds.value.length} 个资源吗？`)
-    await api('/resources/batch', { method: 'DELETE', body: JSON.stringify({ ids: selectedResourceIds.value }) })
-    await Promise.all([loadResources(), loadOverview(), isContentAdmin.value ? loadAdmin() : Promise.resolve()])
+    const ids = [...selectedResourceIds.value]
+    const { refreshFailed } = await runMutationAndRefresh(
+      async () => {
+        await api('/resources/batch', { method: 'DELETE', body: JSON.stringify({ ids }) })
+        const removedCount = resources.filter((item) => ids.includes(item.id)).length
+        resources.splice(0, resources.length, ...resources.filter((item) => !ids.includes(item.id)))
+        resourcePage.total = Math.max(0, resourcePage.total - removedCount)
+        hotResources.splice(0, hotResources.length, ...hotResources.filter((item) => !ids.includes(item.id)))
+        selectedResourceIds.value = []
+      },
+      [loadResources, loadHotResources, loadOverview, isContentAdmin.value ? loadAdmin : async () => undefined],
+    )
     ElMessage.success('已批量删除所选资源')
+    if (refreshFailed) ElMessage.warning('资源已删除，部分页面数据刷新失败，请稍后手动刷新')
   } catch (error) { if (error !== 'cancel') ElMessage.error(error instanceof Error ? error.message : '批量删除资源失败') }
 }
 function changeResourcePage(page: number) { resourcePage.current = page; void loadResources() }
@@ -1843,9 +1881,9 @@ async function submitResource() {
       formData.append('type', resourceForm.type.trim())
       formData.append('summary', resourceForm.summary.trim())
       formData.append('file', resourceFile.value as File)
-      const response = await fetch(`${API_BASE}/resources/upload`, {
+const response = await fetch(`${API_BASE}/resources/upload`, {
         method: 'POST',
-        headers: token.value ? { Authorization: `Bearer ${token.value}` } : {},
+        credentials: 'include',
         body: formData,
       })
       if (!response.ok) {
@@ -1857,8 +1895,12 @@ async function submitResource() {
       }
       resourceDialogVisible.value = false
       resourceFile.value = null
-      await Promise.all([loadResources(), loadOverview(), isContentAdmin.value ? loadAdmin() : Promise.resolve()])
+      const { refreshFailed } = await runMutationAndRefresh(
+        async () => undefined,
+        [loadResources, loadHotResources, loadOverview, isContentAdmin.value ? loadAdmin : async () => undefined],
+      )
       ElMessage.success(isContentAdmin.value ? '资源已发布' : '资源已提交审核，等待管理员审核通过后公开')
+      if (refreshFailed) ElMessage.warning('资源已发布，部分页面数据刷新失败，请稍后手动刷新')
     } catch (error) { ElMessage.error(error instanceof Error ? error.message : '创建资源失败') }
   })
 }
@@ -1881,9 +1923,9 @@ async function handleBlogImageUpload(event: Event) {
   try {
     const formData = new FormData()
     formData.append('file', file)
-    const response = await fetch(`${API_BASE}/blogs/upload-image`, {
+const response = await fetch(`${API_BASE}/blogs/upload-image`, {
       method: 'POST',
-      headers: token.value ? { Authorization: `Bearer ${token.value}` } : {},
+      credentials: 'include',
       body: formData,
     })
     if (!response.ok) { if (response.status === 401 || response.status === 403) throw handleSessionExpired(), Error('登录已过期，请重新登录'); throw Error(await response.text() || '图片上传失败') }
@@ -1939,10 +1981,18 @@ async function publishBlog() {
     try {
       const imageUrl = draftBlog.imageUrl.trim()
       const content = imageUrl && !draftBlog.content.includes(imageUrl) ? `${draftBlog.content.trim()}\n\n![竞赛经验图](${imageUrl})` : draftBlog.content
-      const path = editingBlogId.value ? `/blogs/${editingBlogId.value}` : '/blogs'
-      await api(path, { method: editingBlogId.value ? 'PUT' : 'POST', body: JSON.stringify({ title: draftBlog.title, content, contestTag: draftBlog.contestTag, anonymous: draftBlog.anonymous, visibility: draftBlog.visibility.toUpperCase(), commentsOpen: draftBlog.commentsOpen }) })
-      await Promise.all([loadBlogs(), loadOverview(), isContentAdmin.value ? loadAdmin() : Promise.resolve()])
+      const isEditing = Boolean(editingBlogId.value)
+      const path = isEditing ? `/blogs/${editingBlogId.value}` : '/blogs'
+      const { refreshFailed } = await runMutationAndRefresh(
+        async () => {
+          const result = await api(path, { method: isEditing ? 'PUT' : 'POST', body: JSON.stringify({ title: draftBlog.title, content, contestTag: draftBlog.contestTag, anonymous: draftBlog.anonymous, visibility: draftBlog.visibility.toUpperCase(), commentsOpen: draftBlog.commentsOpen }) })
+          if (!isEditing) creatorStats.works += 1
+          return result
+        },
+        [loadBlogs, loadOverview, loadCreatorStats, isContentAdmin.value ? loadAdmin : async () => undefined],
+      )
       navigateTo('blog'); ElMessage.success(isContentAdmin.value ? '博客已发布' : '博客已提交审核，等待管理员审核通过后公开')
+      if (refreshFailed) ElMessage.warning('博客已发布，部分页面数据刷新失败，请稍后手动刷新')
     } catch (error) { ElMessage.error(error instanceof Error ? error.message : '发布博客失败') }
   })
 }
@@ -1950,10 +2000,19 @@ async function publishBlog() {
 async function deleteBlog(post: BlogView) {
   try {
     await confirmAction(`确定要删除博客「${post.title}」吗？`)
-    await api(`/blogs/${post.id}`, { method: 'DELETE' })
-    if (activeBlog.value?.id === post.id) { activeBlog.value = null; navigateTo('blog') }
-    await Promise.all([loadBlogs(), loadOverview(), isContentAdmin.value ? loadAdmin() : Promise.resolve()])
+    const { refreshFailed } = await runMutationAndRefresh(
+      async () => {
+        await api(`/blogs/${post.id}`, { method: 'DELETE' })
+        if (post.authorId === currentUser.value.id) creatorStats.works = Math.max(0, creatorStats.works - 1)
+        const blogIndex = blogs.findIndex((item) => item.id === post.id)
+        if (blogIndex >= 0) blogs.splice(blogIndex, 1)
+        blogPage.total = Math.max(0, blogPage.total - (blogIndex >= 0 ? 1 : 0))
+        if (activeBlog.value?.id === post.id) { activeBlog.value = null; navigateTo('blog') }
+      },
+      [loadBlogs, loadOverview, loadCreatorStats, isContentAdmin.value ? loadAdmin : async () => undefined],
+    )
     ElMessage.success('博客已删除')
+    if (refreshFailed) ElMessage.warning('博客已删除，部分页面数据刷新失败，请稍后手动刷新')
   } catch (error) { if (error !== 'cancel') ElMessage.error(error instanceof Error ? error.message : '删除博客失败') }
 }
 async function toggleBlogAction(type: 'LIKE' | 'COLLECT') {
@@ -2006,8 +2065,12 @@ async function submitSalon() {
     try {
       await api('/salons', { method: 'POST', body: JSON.stringify({ ...salonForm }) })
       salonDialogVisible.value = false
-      await Promise.all([loadSalons(), loadOverview(), isContentAdmin.value ? loadAdmin() : Promise.resolve()])
+      const { refreshFailed } = await runMutationAndRefresh(
+        async () => undefined,
+        [loadSalons, loadOverview, isContentAdmin.value ? loadAdmin : async () => undefined],
+      )
       ElMessage.success(isContentAdmin.value ? '沙龙已发布，已开放预约' : '沙龙已提交审核，等待管理员审核通过后开放预约')
+      if (refreshFailed) ElMessage.warning('沙龙已发布，部分页面数据刷新失败，请稍后手动刷新')
     } catch (error) { ElMessage.error(error instanceof Error ? error.message : '创建沙龙失败') }
   })
 }
@@ -2027,9 +2090,19 @@ function canManageSalon(salon: SalonView) { return isContentAdmin.value || salon
 async function deleteSalon(salon: SalonView) {
   try {
     await confirmAction(`确定要删除沙龙「${salon.title}」吗？`)
-    await api(`/salons/${salon.id}`, { method: 'DELETE' })
-    await Promise.all([loadSalons(), loadBookings(), loadOverview(), isContentAdmin.value ? loadAdmin() : Promise.resolve()])
+    const { refreshFailed } = await runMutationAndRefresh(
+      async () => {
+        await api(`/salons/${salon.id}`, { method: 'DELETE' })
+        const salonIndex = salons.findIndex((item) => item.id === salon.id)
+        if (salonIndex >= 0) salons.splice(salonIndex, 1)
+        salonPage.total = Math.max(0, salonPage.total - (salonIndex >= 0 ? 1 : 0))
+        bookedSalonIds.value = bookedSalonIds.value.filter((id) => id !== salon.id)
+        bookedSalons.value = bookedSalons.value.filter((item) => item.id !== salon.id)
+      },
+      [loadSalons, loadBookings, loadOverview, isContentAdmin.value ? loadAdmin : async () => undefined],
+    )
     ElMessage.success('沙龙已删除')
+    if (refreshFailed) ElMessage.warning('沙龙已删除，部分页面数据刷新失败，请稍后手动刷新')
   } catch (error) { if (error !== 'cancel') ElMessage.error(error instanceof Error ? error.message : '删除沙龙失败') }
 }
 
@@ -2145,7 +2218,7 @@ async function deleteSalonAppointment(appointment: SalonAppointmentView) {
 }
 async function exportSalonAppointments() {
   try {
-    const response = await fetch(`${API_BASE}/salon/appointments/export`, { headers: { ...(token.value ? { Authorization: `Bearer ${token.value}` } : {}) } })
+    const response = await fetch(`${API_BASE}/salon/appointments/export`, { credentials: 'include' })
     if (!response.ok) { if (response.status === 401) throw handleSessionExpired(), Error('登录已过期，请重新登录'); const text = await response.text(); throw Error(text || '导出预约失败') }
     const blob = await response.blob(); const url = URL.createObjectURL(blob); const anchor = document.createElement('a')
     anchor.href = url; anchor.download = `沙龙预约数据-${new Date().toISOString().slice(0, 10)}.xlsx`
@@ -2187,7 +2260,6 @@ async function transferSuperAdmin(userId: number) {
     await confirmAction('确定要转让超级管理员权限吗？转让后您将不再是超级管理员。')
     await api(`/admin/super/users/${userId}/transfer`, { method: 'POST' })
     selectedRole.value = 'admin'
-    currentUser.value.role = 'admin'
     localStorage.setItem(ROLE_KEY, selectedRole.value)
     sessionStorage.setItem(ROLE_KEY, selectedRole.value)
     navigateTo('admin')
@@ -2279,8 +2351,8 @@ async function uploadMdFile(file: File, attachments: File[] = []) {
   try {
     const formData = new FormData(); formData.append('file', file)
     attachments.filter(item => item.type.startsWith('image/') || /\.(png|jpe?g|gif|webp|bmp)$/i.test(item.name)).forEach(item => formData.append('files', item))
-    const response = await fetch(`${API_BASE}/blog/upload-md`, {
-      method: 'POST', headers: token.value ? { Authorization: `Bearer ${token.value}` } : {}, body: formData,
+const response = await fetch(`${API_BASE}/blog/upload-md`, {
+      method: 'POST', credentials: 'include', body: formData,
     })
     if (!response.ok) { const text = await response.text(); throw new Error(text || '解析文件失败') }
     const data = await response.json()

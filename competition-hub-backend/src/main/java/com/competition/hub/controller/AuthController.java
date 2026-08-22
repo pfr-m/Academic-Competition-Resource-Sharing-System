@@ -12,6 +12,8 @@ import jakarta.validation.constraints.Size;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.ResponseCookie;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -19,6 +21,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
+
+import jakarta.servlet.http.HttpServletResponse;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -39,23 +43,27 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    public LoginResponse login(@Valid @RequestBody LoginRequest request) {
+    public LoginResponse login(@Valid @RequestBody LoginRequest request, HttpServletResponse response) {
         User user = userService.findByUsername(request.username())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "用户名或密码错误"));
         if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "用户名或密码错误");
         }
-        return buildLoginResponse(user);
+        LoginResponse loginResponse = buildLoginResponse(user);
+        setAuthCookie(response, loginResponse.accessToken());
+        return loginResponse;
     }
 
     @PostMapping("/login/phone")
-    public LoginResponse loginByPhone(@Valid @RequestBody PhoneLoginRequest request) {
+    public LoginResponse loginByPhone(@Valid @RequestBody PhoneLoginRequest request, HttpServletResponse response) {
         if (!"123456".equals(request.code())) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "短信验证码错误");
         }
         User user = userService.findByPhone(request.phone())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "手机号未注册"));
-        return buildLoginResponse(user);
+        LoginResponse loginResponse = buildLoginResponse(user);
+        setAuthCookie(response, loginResponse.accessToken());
+        return loginResponse;
     }
 
     @PostMapping("/email/code")
@@ -65,7 +73,7 @@ public class AuthController {
     }
 
     @PostMapping("/register")
-    public LoginResponse register(@Valid @RequestBody RegisterRequest request) {
+    public LoginResponse register(@Valid @RequestBody RegisterRequest request, HttpServletResponse response) {
         emailCodeService.verifyCode(request.email(), request.code());
         User user = userService.registerStudent(
                 request.studentNo(),
@@ -74,7 +82,9 @@ public class AuthController {
                 request.phone(),
                 request.email()
         );
-        return buildLoginResponse(user);
+        LoginResponse loginResponse = buildLoginResponse(user);
+        setAuthCookie(response, loginResponse.accessToken());
+        return loginResponse;
     }
 
     @PutMapping("/reset-password")
@@ -107,6 +117,30 @@ public class AuthController {
                 user.getRole()
         );
     }
+
+    @PostMapping("/logout")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void logout(HttpServletResponse response) {
+        ResponseCookie expiredCookie = ResponseCookie.from(AUTH_COOKIE_NAME, "")
+                .httpOnly(true)
+                .path("/")
+                .maxAge(0)
+                .sameSite("Lax")
+                .build();
+        response.addHeader(HttpHeaders.SET_COOKIE, expiredCookie.toString());
+    }
+
+    private void setAuthCookie(HttpServletResponse response, String token) {
+        ResponseCookie cookie = ResponseCookie.from(AUTH_COOKIE_NAME, token)
+                .httpOnly(true)
+                .path("/")
+                .maxAge(jwtService.getExpirationMinutes() * 60)
+                .sameSite("Lax")
+                .build();
+        response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
+    }
+
+    public static final String AUTH_COOKIE_NAME = "access_token";
 
     public record LoginRequest(@NotBlank String username, @NotBlank @Size(min = 6) String password) {
     }

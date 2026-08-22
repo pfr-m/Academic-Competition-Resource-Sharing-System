@@ -20,6 +20,9 @@ import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.text.PDFTextStripper;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.apache.poi.xwpf.usermodel.XWPFParagraph;
+import org.apache.poi.xwpf.usermodel.XWPFPicture;
+import org.apache.poi.xwpf.usermodel.XWPFPictureData;
+import org.apache.poi.xwpf.usermodel.XWPFRun;
 import org.springframework.http.HttpStatus;
 import org.springframework.core.io.UrlResource;
 import org.springframework.http.ContentDisposition;
@@ -397,10 +400,41 @@ public class BlogController {
 
     private String readDocx(MultipartFile file) {
         try (XWPFDocument document = new XWPFDocument(file.getInputStream())) {
-            return document.getParagraphs().stream()
-                    .map(XWPFParagraph::getText)
-                    .filter(text -> text != null && !text.isBlank())
-                    .collect(Collectors.joining("\n\n"));
+            StringBuilder content = new StringBuilder();
+            for (XWPFParagraph paragraph : document.getParagraphs()) {
+                StringBuilder paragraphContent = new StringBuilder();
+                for (XWPFRun run : paragraph.getRuns()) {
+                    String text = run.text();
+                    if (text != null && !text.isEmpty()) {
+                        paragraphContent.append(text);
+                    }
+                    for (XWPFPicture picture : run.getEmbeddedPictures()) {
+                        XWPFPictureData pictureData = picture.getPictureData();
+                        if (pictureData == null) {
+                            continue;
+                        }
+                        String imageUrl = storeBlogImage(
+                                pictureData.getData(),
+                                pictureData.getFileName()
+                        );
+                        String alt = pictureData.getFileName() == null || pictureData.getFileName().isBlank()
+                                ? "Word 图片"
+                                : pictureData.getFileName();
+                        paragraphContent.append("![")
+                                .append(escapeMarkdownLabel(alt))
+                                .append("](")
+                                .append(imageUrl)
+                                .append(")");
+                    }
+                }
+                if (!paragraphContent.isEmpty()) {
+                    if (!content.isEmpty()) {
+                        content.append("\n\n");
+                    }
+                    content.append(paragraphContent);
+                }
+            }
+            return content.toString();
         } catch (IOException error) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "无法解析 Word 文件内容");
         }
@@ -433,14 +467,27 @@ public class BlogController {
 
     private String storeBlogImage(MultipartFile file) {
         String originalName = file.getOriginalFilename() == null ? "blog-image" : Paths.get(file.getOriginalFilename()).getFileName().toString();
-        String storedName = UUID.randomUUID() + "-" + originalName.replaceAll("[\\\\/:*?\"<>|]", "_");
+        try {
+            return storeBlogImage(file.getBytes(), originalName);
+        } catch (IOException error) {
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "图片保存失败");
+        }
+    }
+
+    private String storeBlogImage(byte[] data, String originalName) {
+        String safeOriginalName = originalName == null || originalName.isBlank() ? "blog-image" : Paths.get(originalName).getFileName().toString();
+        String storedName = UUID.randomUUID() + "-" + safeOriginalName.replaceAll("[\\\\/:*?\"<>|]", "_");
         try {
             Files.createDirectories(imageRoot);
-            file.transferTo(imageRoot.resolve(storedName));
+            Files.write(imageRoot.resolve(storedName), data);
         } catch (IOException error) {
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "图片保存失败");
         }
         return "/api/blogs/images/" + storedName;
+    }
+
+    private String escapeMarkdownLabel(String label) {
+        return label.replace("[", "\\[").replace("]", "\\]");
     }
 
     private String replaceMarkdownImageLinks(String markdown, Map<String, String> uploadedImages) {

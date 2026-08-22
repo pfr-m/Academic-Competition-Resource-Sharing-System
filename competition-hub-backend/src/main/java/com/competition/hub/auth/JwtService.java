@@ -25,6 +25,10 @@ public class JwtService {
         this.expirationMinutes = expirationMinutes;
     }
 
+    public long getExpirationMinutes() {
+        return expirationMinutes;
+    }
+
     public String createToken(AuthPrincipal principal) {
         Instant now = Instant.now();
         return Jwts.builder()
@@ -49,5 +53,6 @@ public class JwtService {
                 Role.valueOf(claims.get("role", String.class))
         );
     }
+
 }
 
