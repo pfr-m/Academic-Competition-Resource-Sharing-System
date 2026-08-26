@@ -29,4 +29,6 @@ public interface SalonService extends IService<Salon> {
     void deleteSalon(Long salonId);
 
     void updateStatus(Long id, String status);
+
+    SalonAppointment createSalonAppointment(Long salonId, Long userId, String userNickname);
 }

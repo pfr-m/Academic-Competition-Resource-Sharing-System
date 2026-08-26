@@ -10,12 +10,17 @@ import com.competition.hub.entity.SalonAppointment;
 import com.competition.hub.mapper.SalonAppointmentMapper;
 import com.competition.hub.mapper.SalonMapper;
 import com.competition.hub.service.SalonService;
+import com.competition.hub.utils.SimpleRedisLock;
+import jakarta.annotation.Resource;
+import org.springframework.aop.framework.AopContext;
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.sql.ResultSet;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -26,7 +31,8 @@ public class SalonServiceImpl extends ServiceImpl<SalonMapper, Salon> implements
     public SalonServiceImpl(SalonAppointmentMapper appointmentMapper) {
         this.appointmentMapper = appointmentMapper;
     }
-
+    @Resource
+    private StringRedisTemplate stringRedisTemplate;
     @Override
     public List<Salon> listApproved() {
         return list(approvedWrapper());
@@ -64,15 +70,38 @@ public class SalonServiceImpl extends ServiceImpl<SalonMapper, Salon> implements
     }
 
     @Override
-    @Transactional
     public SalonAppointment book(Long salonId, Long userId, String userNickname) {
         requireApproved(salonId);
+
+        // 使用业务名+沙龙ID+用户ID作为 key
+        SimpleRedisLock simpleRedisLock = new SimpleRedisLock("salon:" + salonId + ":user:" + userId, stringRedisTemplate);
+        Boolean isLock = simpleRedisLock.tryLock(10);
+        if (!isLock) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "请勿重复点击，正在处理中");
+        }
+
+        try {
+            SalonService proxy = (SalonService) AopContext.currentProxy();
+            return proxy.createSalonAppointment(salonId, userId, userNickname);
+        } catch (IllegalStateException e) {
+            throw new RuntimeException(e);
+        } finally {
+            simpleRedisLock.unlock();
+        }
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public SalonAppointment createSalonAppointment(Long salonId, Long userId, String userNickname) {
+        // 1. 查询是否已预约
         SalonAppointment existing = appointmentMapper.selectOne(new LambdaQueryWrapper<SalonAppointment>()
                 .eq(SalonAppointment::getSalonId, salonId)
                 .eq(SalonAppointment::getUserId, userId));
         if (existing != null && "BOOKED".equals(existing.getStatus())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "你已经预约过该沙龙");
         }
+
+        // 2. 扣减名额
         boolean increased = update(new LambdaUpdateWrapper<Salon>()
                 .eq(Salon::getId, salonId)
                 .apply("booked_count < capacity")
@@ -80,6 +109,8 @@ public class SalonServiceImpl extends ServiceImpl<SalonMapper, Salon> implements
         if (!increased) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "该沙龙名额已满");
         }
+
+        // 3. 更新或创建预约记录
         LocalDateTime now = LocalDateTime.now();
         if (existing != null) {
             existing.setUserNickname(userNickname);
@@ -90,6 +121,7 @@ public class SalonServiceImpl extends ServiceImpl<SalonMapper, Salon> implements
             appointmentMapper.updateById(existing);
             return existing;
         }
+
         SalonAppointment appointment = SalonAppointment.builder()
                 .salonId(salonId)
                 .userId(userId)
