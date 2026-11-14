@@ -999,6 +999,8 @@ import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { runMutationAndRefresh } from './operationRefresh'
 import { canApplyToTeam, getCurrentTeamParticipation } from './teamApplicationRules'
+import type { TeamApplicationStatus, TeamStatus } from './teamApplicationRules'
+import { getPendingApprovalTarget } from './teamApplicationRules'
 import {
   ArrowLeft,
   ArrowDown,
@@ -1040,6 +1042,7 @@ type TeamView = {
   need: string
   skills: string[]
   status: string
+  rawStatus: TeamStatus
   contact: string
   applied: boolean
   hasActiveApplication: boolean
@@ -1049,7 +1052,7 @@ type TeamView = {
   applications: TeamApplicationView[]
   members: TeamMemberView[]
 }
-type TeamApplicationView = { id: number; teamId: number; leaderId: number; teamTitle: string; applicant: string; applicantId: number; skills: string[]; skillsText: string; status: string; rawStatus: string }
+type TeamApplicationView = { id: number; teamId: number; leaderId: number; teamTitle: string; applicant: string; applicantId: number; skills: string[]; skillsText: string; status: string; rawStatus: TeamApplicationStatus }
 type TeamMemberView = { teamId: number; leaderId: number; teamTitle: string; userId: number; member: string; role: string; rawRole: string; skills: string[]; skillsText: string }
 type ReviewView = { id: number; type: string; targetType?: string; targetId?: number; title: string; owner: string; status: string }
 type CandidateView = { id: number; maskedName: string; grade: string; intent: string; skills: string[] }
@@ -1725,21 +1728,22 @@ function formatChineseDateTime(date: Date) {
 function mapTeam(item: any): TeamView {
   const leader = item.leader || {}
   const contact = leader.wechat && leader.wechat !== '双向确认前隐藏' ? `微信：${leader.wechat}` : leader.phone && leader.phone !== '双向确认前隐藏' ? `手机：${leader.phone}` : '双向确认前隐藏'
-  const applications = (item.applications || []).map((entry: any) => {
+  const applications: TeamApplicationView[] = (item.applications || []).map((entry: any) => {
     const application = entry.application || {}; const profile = entry.applicantProfile || {}; const skills = profile.skills || []
-    return { id: application.id, teamId: item.id, leaderId: leader.id, teamTitle: item.title, applicant: profile.maskedName || application.applicantNickname || `用户${application.applicantId}`, applicantId: application.applicantId, skills, skillsText: skills.join('、') || '暂无标签', rawStatus: application.status, status: statusLabel(application.status) }
+    return { id: application.id, teamId: item.id, leaderId: leader.id, teamTitle: item.title, applicant: profile.maskedName || application.applicantNickname || `用户${application.applicantId}`, applicantId: application.applicantId, skills, skillsText: skills.join('、') || '暂无标签', rawStatus: application.status as TeamApplicationStatus, status: statusLabel(application.status) }
   })
-  const members = (item.members || []).map((member: any) => {
+  const members: TeamMemberView[] = (item.members || []).map((member: any) => {
     const skills = member.skills || []
     return { teamId: item.id, leaderId: leader.id, teamTitle: item.title, userId: member.userId, member: member.maskedName || member.nickname || `用户${member.userId}`, rawRole: member.role, role: member.role === 'LEADER' ? '队长' : '成员', skills, skillsText: skills.join('、') || '暂无标签' }
   })
-  const pendingApprovalApplication = applications.find((application: TeamApplicationView) => application.rawStatus === 'PENDING')
-  const participation = getCurrentTeamParticipation(
-    applications.map((application) => ({
+  const applicationRecords = applications.map((application) => ({
       id: application.id,
       applicantId: application.applicantId,
       status: application.rawStatus,
-    })),
+    }))
+  const pendingApprovalApplication = getPendingApprovalTarget(applicationRecords)
+  const participation = getCurrentTeamParticipation(
+    applicationRecords,
     members.map((member) => ({ userId: member.userId })),
     currentUser.value.id,
   )
@@ -1752,6 +1756,7 @@ function mapTeam(item: any): TeamView {
     need: item.need,
     skills: item.skills || [],
     status: statusLabel(item.status),
+    rawStatus: item.status as TeamStatus,
     contact,
     applied: Boolean(pendingApprovalApplication),
     hasActiveApplication: participation.hasActiveApplication,
@@ -2237,6 +2242,7 @@ function openTeamEditor(team: TeamView) { teamEditor.id = team.id; teamEditor.ti
 function canManageTeam(team: TeamView) { return isContentAdmin.value || team.leaderId === currentUser.value.id }
 function canCurrentUserApply(team: TeamView) {
   return canApplyToTeam({
+    teamStatus: team.rawStatus,
     leaderId: team.leaderId,
     currentUserId: currentUser.value.id,
     hasActiveApplication: team.hasActiveApplication,
@@ -2317,6 +2323,7 @@ async function transferSuperAdmin(userId: number) {
     await confirmAction('确定要转让超级管理员权限吗？转让后您将不再是超级管理员。')
     await api(`/admin/super/users/${userId}/transfer`, { method: 'POST' })
     selectedRole.value = 'admin'
+    if (loggedInUser.value) loggedInUser.value = { ...loggedInUser.value, role: 'admin' }
     localStorage.setItem(ROLE_KEY, selectedRole.value)
     sessionStorage.setItem(ROLE_KEY, selectedRole.value)
     navigateTo('admin')

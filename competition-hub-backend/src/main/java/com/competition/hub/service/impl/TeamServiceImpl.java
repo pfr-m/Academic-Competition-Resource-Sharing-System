@@ -110,6 +110,11 @@ public class TeamServiceImpl extends ServiceImpl<TeamMapper, Team> implements Te
                 .eq(TeamApplication::getTeamId, teamId)
                 .eq(TeamApplication::getApplicantId, applicantId));
         if (existing != null) {
+            if ("REJECTED".equals(existing.getStatus())) {
+                existing.setStatus("PENDING");
+                existing.setUpdatedAt(LocalDateTime.now());
+                teamApplicationMapper.updateById(existing);
+            }
             return existing;
         }
         LocalDateTime now = LocalDateTime.now();

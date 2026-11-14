@@ -1,7 +1,10 @@
+export type TeamStatus = 'PENDING' | 'APPROVED' | 'REJECTED'
+export type TeamApplicationStatus = 'PENDING' | 'APPROVED' | 'REJECTED'
+
 export type TeamApplicationRecord = {
   id?: number
   applicantId: number
-  status: string
+  status: TeamApplicationStatus
 }
 
 export type TeamMemberRecord = {
@@ -24,13 +27,19 @@ export function getCurrentTeamParticipation(
   }
 }
 
+export function getPendingApprovalTarget<T extends TeamApplicationRecord>(applications: T[]) {
+  return applications.find((application) => application.status === 'PENDING')
+}
+
 export function canApplyToTeam(input: {
+  teamStatus: TeamStatus
   leaderId: number
   currentUserId: number
   hasActiveApplication: boolean
   isMember: boolean
 }) {
-  return input.leaderId !== input.currentUserId
+  return input.teamStatus === 'APPROVED'
+    && input.leaderId !== input.currentUserId
     && !input.hasActiveApplication
     && !input.isMember
 }

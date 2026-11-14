@@ -15,10 +15,47 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 class TeamServiceDuplicateSubmitTest {
+
+    @Test
+    void applyReopensRejectedApplicationAsPendingAndPersistsIt() {
+        TeamMemberMapper teamMemberMapper = mock(TeamMemberMapper.class);
+        TeamApplicationMapper applicationMapper = mock(TeamApplicationMapper.class);
+        Team team = Team.builder()
+                .id(11L)
+                .leaderId(1L)
+                .status("APPROVED")
+                .build();
+        TeamServiceImpl service = new TeamServiceImpl(teamMemberMapper, applicationMapper) {
+            @Override
+            public Team requireApproved(Long id) {
+                return team;
+            }
+        };
+        LocalDateTime previousUpdatedAt = LocalDateTime.now().minusDays(1);
+        TeamApplication rejected = TeamApplication.builder()
+                .id(23L)
+                .teamId(11L)
+                .applicantId(7L)
+                .applicantNickname("student")
+                .status("REJECTED")
+                .createdAt(previousUpdatedAt.minusDays(1))
+                .updatedAt(previousUpdatedAt)
+                .deleted(0)
+                .build();
+        when(applicationMapper.selectOne(any(Wrapper.class))).thenReturn(rejected);
+
+        TeamApplication result = service.apply(11L, 7L, "student");
+
+        assertThat(result).isSameAs(rejected);
+        assertThat(result.getStatus()).isEqualTo("PENDING");
+        assertThat(result.getUpdatedAt()).isAfter(previousUpdatedAt);
+        verify(applicationMapper).updateById(rejected);
+    }
 
     @Test
     void applyReturnsExistingApplicationWhenConcurrentDuplicateInsertHitsUniqueKey() {
