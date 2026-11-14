@@ -600,7 +600,14 @@
                     <span>{{ team.unlocked ? team.contact : '双向确认前隐藏' }}</span>
                   </div>
                   <div class="card-actions">
-                    <el-button :icon="Position" :loading="isActionPending(actionKey('team-apply', team.id))" :disabled="currentUser.role === 'admin' || team.unlocked || isActionPending(actionKey('team-apply', team.id))" @click="applyTeam(team)">申请加入</el-button>
+                    <el-button
+                      :icon="Position"
+                      :loading="isActionPending(actionKey('team-apply', team.id))"
+                      :disabled="!canCurrentUserApply(team) || isActionPending(actionKey('team-apply', team.id))"
+                      @click="applyTeam(team)"
+                    >
+                      申请加入
+                    </el-button>
                     <el-button type="primary" plain :loading="isActionPending(actionKey('team-approve', team.applicationId || team.id))" :disabled="!team.applied || team.unlocked || currentUser.role === 'student' || isActionPending(actionKey('team-approve', team.applicationId || team.id))" @click="approveTeam(team)">
                       {{ currentUser.role === 'admin' ? '管理员同意' : '队长同意' }}
                     </el-button>
@@ -991,6 +998,7 @@ import 'highlight.js/styles/github-dark.css'
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { runMutationAndRefresh } from './operationRefresh'
+import { canApplyToTeam, getCurrentTeamParticipation } from './teamApplicationRules'
 import {
   ArrowLeft,
   ArrowDown,
@@ -1024,7 +1032,23 @@ type HotResourceView = { id: number; title: string; contest: string; type: strin
 type BlogView = { id: number; authorId: number; title: string; author: string; alias: string; cert: string; contestTag: string; anonymous: boolean; visibility: string; commentsOpen: boolean; content: string; createdAt: string; social: BlogSocialView; comments: BlogComment[] }
 type SalonView = { id: number; speakerId: number; title: string; speaker: string; date: string; month: string; day: string; place: string; capacity: number; booked: number; description: string }
 type TicketView = SalonView & { certificateCode: string }
-type TeamView = { id: number; leaderId: number; contest: string; title: string; need: string; skills: string[]; status: string; contact: string; applied: boolean; unlocked: boolean; applicationId?: number; applications: TeamApplicationView[]; members: TeamMemberView[] }
+type TeamView = {
+  id: number
+  leaderId: number
+  contest: string
+  title: string
+  need: string
+  skills: string[]
+  status: string
+  contact: string
+  applied: boolean
+  hasActiveApplication: boolean
+  isMember: boolean
+  unlocked: boolean
+  applicationId?: number
+  applications: TeamApplicationView[]
+  members: TeamMemberView[]
+}
 type TeamApplicationView = { id: number; teamId: number; leaderId: number; teamTitle: string; applicant: string; applicantId: number; skills: string[]; skillsText: string; status: string; rawStatus: string }
 type TeamMemberView = { teamId: number; leaderId: number; teamTitle: string; userId: number; member: string; role: string; rawRole: string; skills: string[]; skillsText: string }
 type ReviewView = { id: number; type: string; targetType?: string; targetId?: number; title: string; owner: string; status: string }
@@ -1709,9 +1733,33 @@ function mapTeam(item: any): TeamView {
     const skills = member.skills || []
     return { teamId: item.id, leaderId: leader.id, teamTitle: item.title, userId: member.userId, member: member.maskedName || member.nickname || `用户${member.userId}`, rawRole: member.role, role: member.role === 'LEADER' ? '队长' : '成员', skills, skillsText: skills.join('、') || '暂无标签' }
   })
-  const pendingApplication = applications.find((a: TeamApplicationView) => a.rawStatus === 'PENDING')
-  const anyApplication = applications.find((a: TeamApplicationView) => a.rawStatus === 'PENDING' || a.rawStatus === 'APPROVED')
-  return { id: item.id, leaderId: leader.id, contest: item.contest, title: item.title, need: item.need, skills: item.skills || [], status: statusLabel(item.status), contact, applied: !!anyApplication, unlocked: contact !== '双向确认前隐藏', applicationId: pendingApplication?.id, applications, members }
+  const participation = getCurrentTeamParticipation(
+    applications.map((application) => ({
+      id: application.id,
+      applicantId: application.applicantId,
+      status: application.rawStatus,
+    })),
+    members.map((member) => ({ userId: member.userId })),
+    currentUser.value.id,
+  )
+
+  return {
+    id: item.id,
+    leaderId: leader.id,
+    contest: item.contest,
+    title: item.title,
+    need: item.need,
+    skills: item.skills || [],
+    status: statusLabel(item.status),
+    contact,
+    applied: participation.hasActiveApplication,
+    hasActiveApplication: participation.hasActiveApplication,
+    isMember: participation.isMember,
+    unlocked: contact !== '双向确认前隐藏',
+    applicationId: participation.applicationId,
+    applications,
+    members,
+  }
 }
 
 function mapTeamApplication(item: any): TeamApplicationView {
@@ -2186,6 +2234,14 @@ async function batchDeleteApplications(ids: number[], label: string) {
 }
 function openTeamEditor(team: TeamView) { teamEditor.id = team.id; teamEditor.title = team.title; teamEditor.contest = team.contest; teamEditor.need = team.need; teamEditor.skills = [...team.skills]; teamEditorVisible.value = true }
 function canManageTeam(team: TeamView) { return isContentAdmin.value || team.leaderId === currentUser.value.id }
+function canCurrentUserApply(team: TeamView) {
+  return canApplyToTeam({
+    leaderId: team.leaderId,
+    currentUserId: currentUser.value.id,
+    hasActiveApplication: team.hasActiveApplication,
+    isMember: team.isMember,
+  })
+}
 async function saveTeamEdit() {
   if (!teamEditor.id) return
   try {
