@@ -1733,6 +1733,7 @@ function mapTeam(item: any): TeamView {
     const skills = member.skills || []
     return { teamId: item.id, leaderId: leader.id, teamTitle: item.title, userId: member.userId, member: member.maskedName || member.nickname || `用户${member.userId}`, rawRole: member.role, role: member.role === 'LEADER' ? '队长' : '成员', skills, skillsText: skills.join('、') || '暂无标签' }
   })
+  const pendingApprovalApplication = applications.find((application: TeamApplicationView) => application.rawStatus === 'PENDING')
   const participation = getCurrentTeamParticipation(
     applications.map((application) => ({
       id: application.id,
@@ -1752,11 +1753,11 @@ function mapTeam(item: any): TeamView {
     skills: item.skills || [],
     status: statusLabel(item.status),
     contact,
-    applied: participation.hasActiveApplication,
+    applied: Boolean(pendingApprovalApplication),
     hasActiveApplication: participation.hasActiveApplication,
     isMember: participation.isMember,
     unlocked: contact !== '双向确认前隐藏',
-    applicationId: participation.applicationId,
+    applicationId: pendingApprovalApplication?.id,
     applications,
     members,
   }
