@@ -12,6 +12,9 @@ import com.competition.hub.mapper.SalonMapper;
 import com.competition.hub.service.SalonService;
 import com.competition.hub.utils.SimpleRedisLock;
 import jakarta.annotation.Resource;
+import org.redisson.Redisson;
+import org.redisson.api.RLock;
+import org.redisson.api.RedissonClient;
 import org.springframework.aop.framework.AopContext;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -23,6 +26,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.sql.ResultSet;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 @Service
 public class SalonServiceImpl extends ServiceImpl<SalonMapper, Salon> implements SalonService {
@@ -33,6 +37,9 @@ public class SalonServiceImpl extends ServiceImpl<SalonMapper, Salon> implements
     }
     @Resource
     private StringRedisTemplate stringRedisTemplate;
+//    加入Redission,使用它写好的锁
+    @Resource
+    RedissonClient redisson;
     @Override
     public List<Salon> listApproved() {
         return list(approvedWrapper());
@@ -70,12 +77,21 @@ public class SalonServiceImpl extends ServiceImpl<SalonMapper, Salon> implements
     }
 
     @Override
-    public SalonAppointment book(Long salonId, Long userId, String userNickname) {
+    public SalonAppointment book(Long salonId, Long userId, String userNickname){
         requireApproved(salonId);
 
         // 使用业务名+沙龙ID+用户ID作为 key
-        SimpleRedisLock simpleRedisLock = new SimpleRedisLock("salon:" + salonId + ":user:" + userId, stringRedisTemplate);
-        Boolean isLock = simpleRedisLock.tryLock(10);
+//        SimpleRedisLock simpleRedisLock = new SimpleRedisLock("salon:" + salonId + ":user:" + userId, stringRedisTemplate);
+//        这里直接使用Redission的锁了
+        RLock lock = redisson.getLock("salon:" + salonId + ":user:" + userId);
+//        Boolean isLock = simpleRedisLock.tryLock(10);
+        Boolean isLock = null;
+        try {
+            isLock = lock.tryLock(1, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt(); // 恢复中断状态
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "系统繁忙，请稍后重试");
+        }
         if (!isLock) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "请勿重复点击，正在处理中");
         }
@@ -86,7 +102,10 @@ public class SalonServiceImpl extends ServiceImpl<SalonMapper, Salon> implements
         } catch (IllegalStateException e) {
             throw new RuntimeException(e);
         } finally {
-            simpleRedisLock.unlock();
+            if (lock.isHeldByCurrentThread()){
+                lock.unlock();
+            }
+
         }
     }
 

@@ -1,6 +1,8 @@
 package com.competition.hub.utils;
 
 import cn.hutool.core.lang.UUID;
+import jakarta.annotation.Resource;
+import org.redisson.Redisson;
 import org.springframework.data.redis.core.StringRedisTemplate;
 
 import java.util.concurrent.TimeUnit;
@@ -14,6 +16,7 @@ public class SimpleRedisLock implements ILock{
         this.name = name;
         this.stringRedisTemplate = stringRedisTemplate;
     }
+
 //    开发规范还要一个锁的前缀
     private final String KEY_PREFIX = "lock:";
 //有一个UUID的前缀最为key

@@ -1001,6 +1001,7 @@ import { runMutationAndRefresh } from './operationRefresh'
 import { canApplyToTeam, getCurrentTeamParticipation } from './teamApplicationRules'
 import type { TeamApplicationStatus, TeamStatus } from './teamApplicationRules'
 import { getPendingApprovalTarget } from './teamApplicationRules'
+import { downloadErrorMessage } from './downloadErrors.js'
 import {
   ArrowLeft,
   ArrowDown,
@@ -1792,7 +1793,11 @@ async function downloadResource(resource: ResourceView) {
       const sizeText = formatFileSize(result.fileSize)
       downloading = ElMessage.info({ message: `${sizeText ? `${sizeText} 文件` : '文件'}下载中，请不要重复点击`, duration: 0 })
       const response = await fetchWithTimeout(absoluteApiUrl(result.downloadUrl), { credentials: 'include' })
-      if (!response.ok) { if (response.status === 401 || response.status === 403) throw handleSessionExpired(), Error('登录已过期，请重新登录'); throw Error(await response.text() || '下载失败') }
+      if (!response.ok) {
+        const message = downloadErrorMessage(response.status, await response.text())
+        if (response.status === 401) handleSessionExpired()
+        throw Error(message)
+      }
       const blob = await response.blob()
       const url = URL.createObjectURL(blob)
       const anchor = document.createElement('a')

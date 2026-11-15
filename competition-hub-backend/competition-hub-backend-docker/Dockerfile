@@ -7,5 +7,5 @@ EXPOSE 8099
 # 3. 复制 target 目录下的 jar 包
 COPY target/competition-hub-backend-0.0.1-SNAPSHOT.jar app.jar
 
-# 4. 启动命令（设置时区为上海，避免容器内日志时间不对）
-ENTRYPOINT ["java", "-Duser.timezone=Asia/Shanghai", "-jar", "/app.jar"]
+# 4. 启动命令（设置时区为上海，并限制 JVM 内存）
+ENTRYPOINT ["java", "-Xms128m", "-Xmx768m", "-Duser.timezone=Asia/Shanghai", "-jar", "/app.jar"]
